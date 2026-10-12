@@ -104,11 +104,10 @@ describe("비밀번호 정책", () => {
     expect(birthdatePasswordSchema.safeParse("95031").success).toBe(false);
     expect(birthdatePasswordSchema.safeParse("1995-03-12").success).toBe(false);
   });
-  it("직원 본인 비밀번호: 6자리 이상, 쉬운 번호 금지", () => {
+  it("직원 본인 비밀번호: 6자리 이상이면 단순해도 허용 (대표 결정)", () => {
     expect(staffOwnPasswordSchema.safeParse("482913").success).toBe(true);
-    for (const weak of ["111111", "123456", "654321", "234567", "12345"]) {
-      expect(staffOwnPasswordSchema.safeParse(weak).success).toBe(false);
-    }
+    expect(staffOwnPasswordSchema.safeParse("111111").success).toBe(true);
+    expect(staffOwnPasswordSchema.safeParse("12345").success).toBe(false);
   });
   it("첫 변경은 현재 비밀번호 없이, 평소 변경은 현재 비밀번호 필요", () => {
     const first = changeOwnPasswordSchema("staff", false).safeParse({ newPassword: "482913", confirmPassword: "482913" });

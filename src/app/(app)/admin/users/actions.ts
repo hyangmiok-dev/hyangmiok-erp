@@ -77,7 +77,7 @@ export async function createUserAction(_prev: ActionResult, fd: FormData): Promi
   const supabase = await createClient();
   const { error: profErr } = await supabase
     .from("profiles")
-    .update({ full_name: v.fullName, role: v.role, is_active: true, login_id: loginId, must_change_password: true })
+    .update({ full_name: v.fullName, role: v.role, is_active: true, login_id: loginId })
     .eq("id", newId);
   const { error: memErr } = profErr
     ? { error: null }
@@ -167,15 +167,12 @@ export async function resetPasswordAction(_prev: ActionResult, fd: FormData): Pr
     return { ok: false, message: (e as Error).message };
   }
 
-  // 다음 로그인 때 본인 비밀번호로 바꾸게 한다 (대표 세션 → 감사로그에 기록)
-  const { error: flagErr } = await supabase.from("profiles").update({ must_change_password: true }).eq("id", userId);
-  if (flagErr) return { ok: true, message: "비밀번호는 바꿨지만 '첫 로그인 변경' 설정에 실패했습니다." };
 
   return {
     ok: true,
     message:
       target.role === "staff"
-        ? "생년월일로 초기화했습니다. 직원이 로그인하면 새 비밀번호를 정하게 됩니다."
-        : "임시 비밀번호로 초기화했습니다. 로그인하면 새 비밀번호를 정하게 됩니다.",
+        ? "생년월일로 초기화했습니다. 이제 이름 + 생년월일로 로그인할 수 있습니다."
+        : "새 비밀번호로 초기화했습니다.",
   };
 }

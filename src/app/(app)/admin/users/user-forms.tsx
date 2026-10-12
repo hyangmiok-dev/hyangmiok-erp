@@ -117,8 +117,7 @@ export function CreateUserDialog({ stores }: { stores: StoreOption[] }) {
         <DialogHeader>
           <DialogTitle>새 계정 만들기</DialogTitle>
           <DialogDescription>
-            직원은 <b>이름</b>으로 로그인하고, 첫 비밀번호는 <b>생년월일 6자리</b>입니다. 처음 로그인하면 본인만 아는
-            비밀번호로 바꾸게 됩니다.
+            직원은 <b>이름</b>으로 로그인하고, 비밀번호는 <b>생년월일 6자리</b>입니다.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={keepFormOnSubmit(action)} className="space-y-4">
@@ -186,7 +185,7 @@ export function CreateUserDialog({ stores }: { stores: StoreOption[] }) {
           )}
 
           <Field
-            label={isStaff ? "첫 비밀번호 (생년월일 6자리)" : "첫 비밀번호"}
+            label={isStaff ? "비밀번호 (생년월일 6자리)" : "비밀번호"}
             htmlFor="password"
             error={fe.password}
             hint={passwordHintFor(role, "initial")}
@@ -276,7 +275,7 @@ export function EditUserDialog({
               label={isStaff ? "비밀번호 잊었을 때: 생년월일로 초기화" : "비밀번호 초기화"}
               htmlFor={`pw-${user.id}`}
               error={pwState.fieldErrors?.password}
-              hint={`${passwordHintFor(user.role, "initial")} · 다음 로그인 때 새 비밀번호를 정하게 됩니다`}
+              hint={passwordHintFor(user.role, "initial")}
             >
               <Input
                 id={`pw-${user.id}`}

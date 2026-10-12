@@ -5,7 +5,7 @@ import { ROLES, requiresStoreMembership, type Role } from "@/lib/auth/roles";
 // ---------------------------------------------------------------------
 // 비밀번호 정책
 //  - 관리자(대표·본사·지점관리자): 10자 이상, 영문+숫자
-//  - 일반 직원: 첫 비밀번호 = 생년월일 6자리 → 첫 로그인 때 본인만 아는 6자리 이상으로 변경(필수)
+//  - 일반 직원: 비밀번호 = 생년월일 6자리 (대표 결정 2026-10-13: 첫 로그인 변경 강제 없음, 원하면 [내 계정]에서 6자리 이상으로 변경)
 //  - Supabase 대시보드의 최소 길이는 6 이어야 직원 비밀번호가 허용된다.
 // ---------------------------------------------------------------------
 
@@ -36,12 +36,11 @@ export function isTrivialPassword(v: string): boolean {
   return ["password", "qwerty", "asdfgh", "hyangmiok", "향미옥"].some((w) => v.toLowerCase().includes(w));
 }
 
-/** 직원이 직접 정하는 비밀번호: 6자리 이상, 너무 쉬운 번호 금지 */
+/** 직원이 직접 바꾸는 비밀번호: 6자리 이상 */
 export const staffOwnPasswordSchema = z
   .string()
   .min(6, "비밀번호는 6자리 이상이어야 합니다.")
-  .max(72, "비밀번호는 72자 이하여야 합니다.")
-  .refine((v) => !isTrivialPassword(v), "111111, 123456 처럼 쉬운 번호는 사용할 수 없습니다.");
+  .max(72, "비밀번호는 72자 이하여야 합니다.");
 
 /** 대표가 정해주는 첫(임시) 비밀번호 규칙 */
 export function initialPasswordSchemaFor(role: Role) {
@@ -54,7 +53,7 @@ export function ownPasswordSchemaFor(role: Role) {
 }
 
 export function passwordHintFor(role: Role, kind: "initial" | "own"): string {
-  if (role === "staff") return kind === "initial" ? "생년월일 숫자 6자리 (예: 950312)" : "본인만 아는 숫자 6자리 이상";
+  if (role === "staff") return kind === "initial" ? "생년월일 숫자 6자리 (예: 950312)" : "6자리 이상";
   return "10자 이상, 영문+숫자 포함";
 }
 
