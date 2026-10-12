@@ -1,0 +1,56 @@
+@AGENTS.md
+
+# 향미옥 경영관리 시스템 — 프로젝트 규칙
+
+한국식 쌀국수 '향미옥' 3개 직영점 통합 경영관리 웹앱. 대표가 매장에 가지 않아도 숫자로 관리하는 것이 목표.
+설계 전체는 `docs/ARCHITECTURE.md`, 단계별 진행 현황은 `docs/STATUS.md`.
+
+## 명령어
+```bash
+npm run dev         # 개발 서버 (http://localhost:3000)
+npm run check       # 타입검사 + 린트 + 테스트 (커밋 전 필수)
+npm run build       # 프로덕션 빌드
+npm test            # Vitest (unit + PGlite DB/RLS 테스트)
+```
+- Windows: 프로젝트 경로에 한글이 있어도 동작함. 단 아주 긴 경로(임시폴더 등)에서 npm install 시 `spawn cmd.exe ENOENT` 발생 가능.
+
+## 스택
+Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 · TypeScript strict · Tailwind 4 · shadcn/ui(**Base UI 기반 — `asChild` 대신 `render` prop**) · Supabase(Postgres, Auth, RLS) · Zod 4 · Vitest + PGlite.
+
+## 절대 규칙
+1. **권한은 DB(RLS)가 최종 강제.** 새 테이블은 반드시 `enable row level security` + 정책 + `revoke ... from anon` + 필요한 grant 만. 앱 코드의 숨김은 보조일 뿐.
+2. 모든 지점 데이터 테이블은 `store_id uuid not null references stores` 를 갖고 `app.has_store_access` / `app.can_manage_store` / `app.can_view_store_financials` 로 정책 작성.
+3. `src/lib/auth/roles.ts` 의 규칙은 `app.*` SQL 함수와 **같은 의미**를 유지. 하나를 바꾸면 둘 다 + 테스트 수정.
+4. 서버 액션 시작 시 `authorizeAction([...])`, 페이지는 `requireUser()` / `requireRole([...])`. 입력은 Zod 로 서버에서 검증.
+5. Secret key(`createAdminClient`)는 Auth 관리 작업에만. 업무 데이터 쓰기는 사용자 세션 `createClient()` 로 (감사로그에 수행자 남김).
+6. 금액은 원 단위 정수(bigint). 부동소수점 누적 금지. 표시는 `formatKRW`. **값 없음은 '미입력'**, 0 으로 나눔은 `safeDivide` → '계산불가'.
+7. 날짜는 Asia/Seoul. 영업일 키는 `seoulDateKey()`. `new Date().toISOString().slice(0,10)` 금지(UTC).
+8. 확인되지 않은 사업 정보(주소·좌석수 등)를 임의로 채우지 않는다 → NULL.
+9. 예시/테스트 데이터는 운영 DB 에 넣지 않는다. 개발·운영 Supabase 프로젝트 분리. 시드 스크립트는 `NEXT_PUBLIC_APP_ENV=production` 에서 실행 거부해야 함.
+10. 급여·법정수당 계산은 '검증 전 초안'으로만 표시. 확정 급여처럼 보이게 하지 말 것.
+11. 실제로 실행·검증하지 않은 기능은 `docs/STATUS.md` 에 완료로 표시하지 않는다.
+
+## Next.js 16 주의
+- 미들웨어는 `src/proxy.ts` (export `proxy`).
+- 세션(쿠키)을 읽는 서버 컴포넌트는 `<Suspense>` 안에서 렌더. 패턴: `page.tsx` 는 Suspense 껍데기, 내부 async 컴포넌트에서 `requireUser()`.
+- 재무 데이터에 `use cache` 사용 금지 (항상 최신값).
+- `forbidden()`/`unauthorized()` 는 실험 기능 → 사용하지 않음 (`/forbidden` 리다이렉트).
+- API/규칙이 헷갈리면 `node_modules/next/dist/docs/` 를 먼저 읽을 것.
+
+## DB 변경 절차
+1. `supabase/migrations/YYYYMMDDHHMMSS_설명.sql` 새 파일 추가 (기존 적용된 파일 수정 금지).
+2. `tests/db/` 에 RLS·무결성 테스트 추가 → `npm test` (PGlite 가 실제 SQL 을 실행).
+3. Supabase 적용: 대시보드 SQL Editor 에 붙여넣기 또는 `npx supabase db push`.
+4. 보안 정의 함수는 `security definer` + `set search_path = ''` + 완전한 스키마명. 단, 호출자 역할(`current_user`)이 필요한 트리거는 `security invoker`.
+
+## 폴더
+- `src/app/(app)/` 로그인 후 화면, `src/app/login/` 로그인
+- `src/lib/auth/` 권한 규칙·DAL, `src/lib/data/` 조회(server-only), `src/lib/validation/` Zod
+- `src/components/ui/` shadcn 원본(가급적 수정 금지), `src/components/` 공통 컴포넌트
+- `tests/db/harness.ts` — `createTestDb()`, `asUser(db, userId, fn)` 로 역할별 쿼리 테스트
+
+## UI 규칙
+- 한국어, 원화, `ko-KR` 형식. PC=좌측 사이드바 대시보드, 모바일=상단바+시트 메뉴, 입력 요소 높이 ≥ 40px, 글자 16px(iOS 확대 방지).
+- 로딩(`LoadingState`) / 오류(`ErrorState`) / 데이터 없음(`EmptyState`) 을 구분해 표시.
+- 각 수치에는 최종 갱신시각·출처를 표시(2단계부터).
+- 메뉴 정의는 `NAV_ITEMS` (roles.ts). 단계 완료 시 `CURRENT_STAGE` 올리기.
