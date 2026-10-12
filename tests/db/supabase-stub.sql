@@ -26,3 +26,27 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+
+-- Supabase Storage 의 최소 모사: 버킷 + 파일(objects, RLS 켜짐). 업로드는 objects 에 insert 하는 것과 같다.
+create schema storage;
+grant usage on schema storage to anon, authenticated, service_role;
+create table storage.buckets (
+  id                 text primary key,
+  name               text not null unique,
+  public             boolean default false,
+  file_size_limit    bigint,
+  allowed_mime_types text[],
+  created_at         timestamptz default now()
+);
+create table storage.objects (
+  id          uuid primary key default gen_random_uuid(),
+  bucket_id   text references storage.buckets (id),
+  name        text,
+  owner_id    text,
+  metadata    jsonb,
+  created_at  timestamptz default now(),
+  unique (bucket_id, name)
+);
+alter table storage.buckets enable row level security;
+alter table storage.objects enable row level security;
+grant all on storage.buckets, storage.objects to anon, authenticated, service_role;

@@ -161,10 +161,11 @@ export interface ItemPrice {
   timesBought: number;
 }
 
-/** 품목(이름+단위)별 최근 단가와 직전 단가 */
+/** 품목(이름+단위)별 최근 단가와 직전 단가 ('부가세' 줄은 품목이 아니므로 뺀다) */
 export function itemPriceHistory(lines: PriceLine[]): ItemPrice[] {
   const groups = new Map<string, PriceLine[]>();
   for (const l of lines) {
+    if (l.itemName.trim() === "부가세") continue;
     const key = `${l.itemName.trim()}|${l.unit?.trim() ?? ""}`;
     groups.set(key, [...(groups.get(key) ?? []), l]);
   }

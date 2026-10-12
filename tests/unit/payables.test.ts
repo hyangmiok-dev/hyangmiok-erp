@@ -110,6 +110,14 @@ describe("품목 단가 변동", () => {
   it("한 번만 산 품목은 변동 없음", () => {
     expect(h.find((x) => x.itemName === "숙주")?.change.status).toBe("missing");
   });
+
+  it("거래명세표의 '부가세' 줄은 품목 단가표에 넣지 않는다", () => {
+    const v = itemPriceHistory([
+      { date: "2026-10-02", itemName: "부가세", unit: null, quantity: 1, unitPrice: 5000 },
+      { date: "2026-10-02", itemName: "소스", unit: "개", quantity: 2, unitPrice: 10000 },
+    ]);
+    expect(v.map((x) => x.itemName)).toEqual(["소스"]);
+  });
 });
 
 describe("품목 줄 도우미", () => {

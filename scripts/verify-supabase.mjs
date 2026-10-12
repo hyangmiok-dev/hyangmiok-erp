@@ -55,13 +55,21 @@ const { data: reserve, error: resErr } = await admin.from("stores").select("name
 if (resErr) bad(`냉장고 재고 비율 마이그레이션(20261013000600) 미적용: ${resErr.message}`);
 else ok(`냉장고 재고 비율 적용됨 (${reserve.map((s) => `${s.name.replace("향미옥 ", "")} ${Number(s.stock_reserve_pct)}%`).join(", ")})`);
 
+const { count: stCount, error: stErr } = await admin.from("purchase_statements").select("id", { count: "exact", head: true });
+if (stErr) bad(`거래명세표 사진 마이그레이션(20261013000700) 미적용: ${stErr.message}`);
+else ok(`거래명세표 사진 마이그레이션 적용됨 (기록 ${stCount ?? 0}장)`);
+const { data: bucket, error: bErr } = await admin.storage.getBucket("statements");
+if (bErr || !bucket) bad(`사진 보관함(statements 버킷) 없음: ${bErr?.message ?? ""}`);
+else if (bucket.public) bad("사진 보관함이 공개로 되어 있음! 비공개여야 함");
+else ok(`사진 보관함 비공개 (최대 ${Math.round((bucket.file_size_limit ?? 0) / 1024 / 1024)}MB, ${bucket.allowed_mime_types?.join(", ") ?? "형식 제한 없음"})`);
+
 const { data: allProfiles } = await admin.from("profiles").select("role, is_active");
 const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 200 });
 ok(`Auth 사용자 ${authUsers?.users?.length ?? "?"}명 / 프로필 ${allProfiles?.length ?? "?"}개`);
 
 console.log("2) 비로그인(공개 키)으로는 데이터가 차단되는지");
 const anon = createClient(url, pub, { auth: { persistSession: false } });
-for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches", "expenses", "expense_categories", "inventory_counts", "vendors", "vendor_stores", "expense_lines", "vendor_payments"]) {
+for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches", "expenses", "expense_categories", "inventory_counts", "vendors", "vendor_stores", "expense_lines", "vendor_payments", "purchase_statements"]) {
   const { data, error } = await anon.from(table).select("*").limit(1);
   if (error || (data ?? []).length === 0) ok(`${table}: 차단됨${error ? ` (${error.code ?? error.message})` : " (0행)"}`);
   else bad(`${table}: 비로그인 상태에서 데이터가 보임!`);
@@ -69,6 +77,12 @@ for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily
 const { error: rpcErr } = await anon.rpc("set_store_memberships", { p_user_id: null, p_store_ids: [] });
 if (rpcErr) ok(`set_store_memberships: 비로그인 실행 차단 (${rpcErr.code ?? rpcErr.message})`);
 else bad("set_store_memberships: 비로그인 실행이 허용됨!");
+const { error: cRpcErr } = await anon.rpc("begin_statement_ai", { p_statement_id: "00000000-0000-4000-8000-000000000000" });
+if (cRpcErr) ok(`begin_statement_ai: 비로그인 실행 차단 (${cRpcErr.code ?? cRpcErr.message})`);
+else bad("begin_statement_ai: 비로그인 실행이 허용됨!");
+const { data: anonFiles, error: anonFileErr } = await anon.storage.from("statements").list();
+if (anonFileErr || (anonFiles ?? []).length === 0) ok("사진 보관함: 비로그인 조회 차단");
+else bad("사진 보관함: 비로그인 상태에서 파일 목록이 보임!");
 
 console.log("3) 공개 회원가입이 꺼져 있는지");
 const probe = `signup-probe-${Date.now()}@example.com`;

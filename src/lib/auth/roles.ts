@@ -80,6 +80,7 @@ export type NavIcon =
   | "recipe"
   | "compare"
   | "expense"
+  | "statement"
   | "vendor"
   | "purchases"
   | "payables"
@@ -102,6 +103,8 @@ const MANAGERS: readonly Role[] = ["owner", "hq_manager", "store_manager"];
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "홈", icon: "home", roles: ALL, stage: 1, group: "업무" },
   { href: "/sales", label: "매출 입력", icon: "sales", roles: MANAGERS, stage: 2, group: "업무" },
+  // 거래명세표 사진 → AI 읽기 → 올린 사람이 확인 후 확정 (지점 관리자도 올림, 대표 결정 2026-10-13)
+  { href: "/statements", label: "거래명세표", icon: "statement", roles: MANAGERS, stage: 3, group: "업무" },
   { href: "/checklists", label: "오픈·마감 점검", icon: "checklist", roles: ALL, stage: 4, group: "업무" },
   { href: "/inventory", label: "재고·발주", icon: "inventory", roles: ALL, stage: 5, group: "업무" },
   { href: "/production", label: "레시피·육수 생산", icon: "recipe", roles: MANAGERS, stage: 5, group: "업무" },

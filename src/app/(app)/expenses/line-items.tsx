@@ -51,20 +51,39 @@ export function serializeLines(lines: LineDraft[]): string {
   );
 }
 
+export type LineField = "itemName" | "quantity" | "unit" | "unitPrice" | "amount";
+
+const FLAG_CLASS = "border-amber-500 bg-amber-50 dark:bg-amber-950/40";
+const FLAG_TITLE = "사진에서 확실히 읽지 못한 칸이에요. 사진을 보고 확인해 주세요.";
+
 export function LineItemsEditor({
   lines,
   onChange,
   suggestions,
   error,
+  flags,
+  onFieldEdit,
 }: {
   lines: LineDraft[];
   onChange: (lines: LineDraft[]) => void;
   suggestions: ItemSuggestion[];
   error?: string;
+  /** 확인이 필요한 칸 (거래명세표 사진 AI 읽기): 줄 key → 칸 이름 */
+  flags?: Record<string, LineField[]>;
+  /** 칸을 고치면 알림 (확인 표시 지우기용) */
+  onFieldEdit?: (key: string, field: LineField) => void;
 }) {
   const byName = new Map(suggestions.map((s) => [s.name, s]));
+  const flagged = (key: string, field: LineField) => flags?.[key]?.includes(field) ?? false;
+  const flagProps = (key: string, field: LineField) =>
+    flagged(key, field) ? { "aria-invalid": true as const, title: FLAG_TITLE } : {};
 
   function update(key: string, patch: Partial<LineDraft>) {
+    if (onFieldEdit) {
+      for (const f of ["itemName", "quantity", "unit", "unitPrice", "amount"] as const) {
+        if (patch[f] !== undefined) onFieldEdit(key, f);
+      }
+    }
     onChange(
       lines.map((l) => {
         if (l.key !== key) return l;
@@ -119,7 +138,8 @@ export function LineItemsEditor({
                 value={l.itemName}
                 maxLength={60}
                 onChange={(e) => update(l.key, { itemName: e.target.value })}
-                className="h-10 text-base"
+                className={cn("h-10 text-base", flagged(l.key, "itemName") && FLAG_CLASS)}
+                {...flagProps(l.key, "itemName")}
               />
               <Button
                 type="button"
@@ -138,7 +158,8 @@ export function LineItemsEditor({
                   placeholder="수량"
                   value={l.quantity}
                   onChange={(e) => update(l.key, { quantity: decimal(e.target.value) })}
-                  className="h-10 text-right text-base tabular-nums"
+                  className={cn("h-10 text-right text-base tabular-nums", flagged(l.key, "quantity") && FLAG_CLASS)}
+                  {...flagProps(l.key, "quantity")}
                 />
                 <Input
                   aria-label="단위"
@@ -146,7 +167,8 @@ export function LineItemsEditor({
                   value={l.unit}
                   maxLength={10}
                   onChange={(e) => update(l.key, { unit: e.target.value })}
-                  className="h-10 text-base"
+                  className={cn("h-10 text-base", flagged(l.key, "unit") && FLAG_CLASS)}
+                  {...flagProps(l.key, "unit")}
                 />
                 <Input
                   aria-label="단가"
@@ -154,7 +176,8 @@ export function LineItemsEditor({
                   placeholder="단가"
                   value={comma(l.unitPrice)}
                   onChange={(e) => update(l.key, { unitPrice: digits(e.target.value).slice(0, 9) })}
-                  className="h-10 text-right text-base tabular-nums"
+                  className={cn("h-10 text-right text-base tabular-nums", flagged(l.key, "unitPrice") && FLAG_CLASS)}
+                  {...flagProps(l.key, "unitPrice")}
                 />
                 <Input
                   aria-label="금액"
@@ -162,7 +185,11 @@ export function LineItemsEditor({
                   placeholder="금액"
                   value={comma(l.amount)}
                   onChange={(e) => update(l.key, { amount: digits(e.target.value).slice(0, 10), amountEdited: true })}
-                  className="col-span-3 h-10 text-right text-base font-semibold tabular-nums sm:col-span-1"
+                  className={cn(
+                    "col-span-3 h-10 text-right text-base font-semibold tabular-nums sm:col-span-1",
+                    flagged(l.key, "amount") && FLAG_CLASS,
+                  )}
+                  {...flagProps(l.key, "amount")}
                 />
               </div>
             </div>

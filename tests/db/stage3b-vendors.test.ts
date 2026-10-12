@@ -74,9 +74,21 @@ describe("거래처 권한", () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it("지점 관리자는 거래처를 볼 수 없다", async () => {
-    const r = await asUser(db, MGR1, (tx) => tx.query(`select * from public.vendors`));
-    expect(r.rows).toHaveLength(0);
+  it("지점 관리자는 거래 중인 거래처 이름만 볼 수 있다 (거래명세표 사진 올리기용, 0700), 고칠 수는 없다", async () => {
+    await db.query(`update public.vendors set is_active = false where name = '농협'`);
+    const r = await asUser(db, MGR1, (tx) => tx.query<{ name: string; is_active: boolean }>(`select name, is_active from public.vendors`));
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(r.rows.every((x) => x.is_active)).toBe(true);
+    expect(r.rows.map((x) => x.name)).not.toContain("농협");
+    await db.query(`update public.vendors set is_active = true where name = '농협'`);
+
+    const s1 = await storeId(db, "S1");
+    const links = await asUser(db, MGR1, (tx) => tx.query<{ store_id: string }>(`select store_id from public.vendor_stores`));
+    expect(links.rows.length).toBeGreaterThan(0);
+    expect(links.rows.every((x) => x.store_id === s1)).toBe(true);
+
+    const u = await asUser(db, MGR1, (tx) => tx.query(`update public.vendors set phone = '010' where name = '엠앤아이'`));
+    expect(u.affectedRows).toBe(0);
   });
 
   it("거래 지점 교체는 대표만 (set_vendor_stores)", async () => {

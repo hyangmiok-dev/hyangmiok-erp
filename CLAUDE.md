@@ -53,6 +53,13 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 - Cloudflare Workers 설정(`wrangler.jsonc`, `open-next.config.ts`, `cloudflare/postbuild.mjs`, `npm run cf:*`)은 예비용으로 남겨 둠. 무료 플랜 CPU 10ms 제한 때문에 보류.
   Cache Components 는 Cloudflare(workerd) 호환 문제로 꺼 둠 (`next.config.ts` 주석).
 - Vercel 은 무료(Hobby)가 비상업 전용이라 사용하지 않음.
+
+## Supabase Edge Function (거래명세표 AI 읽기)
+- `supabase/functions/read-statement/` — `index.ts`(Deno, Claude API 호출), `handler.ts`(순서·검사, Node 테스트), `schema.ts`(AI 출력 형식·지시문, Next 앱도 import), `deno.json`(npm 버전 고정).
+- Netlify 무료 함수는 10초 제한 → AI 호출은 브라우저에서 Edge Function(무료 150초)으로 직접. 사용자 JWT 로 동작(RLS), 비밀값은 `ANTHROPIC_API_KEY` 하나(대표가 대시보드 Secrets 에 입력).
+- 타입 검사: `npx deno@2.9.6 check --no-lock --config supabase/functions/read-statement/deno.json supabase/functions/read-statement/index.ts`
+- 배포(로그인 1번 필요: `npx supabase@2.118.0 login`): `npx supabase@2.118.0 functions deploy read-statement --project-ref <ref> --use-api`
+- tsconfig 는 `supabase/functions` 를 제외한다 (Deno 전용). `schema.ts`·`handler.ts` 는 앱/테스트에서 import 될 때 검사된다.
 ## 폴더
 - `src/app/(app)/` 로그인 후 화면, `src/app/login/` 로그인
 - `src/lib/auth/` 권한 규칙·DAL, `src/lib/data/` 조회(server-only), `src/lib/validation/` Zod
