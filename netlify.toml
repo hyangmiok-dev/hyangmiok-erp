@@ -1,16 +1,19 @@
 # Netlify 배포 설정 (무료 요금제, 2026-10-13 대표 결정)
 #
-# 포인트 아끼기: Netlify 무료는 '실제 배포 1번 = 15포인트'(월 300포인트).
-# → 운영 배포는 `release` 브랜치에 올릴 때만 일어나게 한다 (Netlify 의 Production branch = release).
-#   평소 개발은 main 에 올리고, 모아서 주 1~2회 `git push origin main:release` 로 배포.
+# 포인트 아끼기: Netlify 무료는 '성공한 운영 배포 1번 = 15포인트'(월 300포인트).
+# → main 에 올려도 기본은 배포를 건너뛴다(ignore). 커밋 메시지에 [deploy] 가 들어 있을 때만 배포한다.
+#   평소 개발 커밋은 그냥 push, 모아서 주 1~2회:  git commit --allow-empty -m "[deploy] 배포: 내용"  → push
+#   (건너뛴 빌드·실패한 빌드는 포인트를 쓰지 않는다 — Netlify 'How credits work' 문서)
 #
 # 비밀값(SUPABASE_SECRET_KEY)과 Supabase 주소·공개 키는 이 파일에 넣지 않고
-# Netlify 화면(Site configuration → Environment variables)에만 넣는다.
+# Netlify 화면(프로젝트 구성 → 환경 변수)에만 넣는다.
 # 로그인 아이디 도메인(AUTH_LOGIN_ID_DOMAIN)은 코드 기본값(staff.hyangmiok.invalid)을 쓴다.
 
 [build]
   command = "npm run build"
   publish = ".next"
+  # 종료코드 0 = 이번 빌드 건너뜀, 1 = 빌드 진행
+  ignore = "git log -1 --pretty=%B | grep -qF '[deploy]' && exit 1 || exit 0"
 
 [build.environment]
   NODE_VERSION = "22"
