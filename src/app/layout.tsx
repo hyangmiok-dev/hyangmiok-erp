@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   title: { default: "향미옥 경영관리", template: "%s · 향미옥 경영관리" },
   description: "향미옥 직영매장 통합 경영관리 시스템",
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, title: "향미옥", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

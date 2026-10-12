@@ -64,7 +64,7 @@ export function DashboardFilters({
             onChange={(e) => go({ store: e.target.value === "all" ? null : e.target.value })}
             className="h-10 rounded-full border bg-background px-4 text-sm"
           >
-            <option value="all">전체 지점</option>
+            <option value="all">모든 지점 (따로따로)</option>
             {stores.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}

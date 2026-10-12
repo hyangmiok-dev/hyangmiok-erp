@@ -26,9 +26,11 @@ export default function LoginPage() {
               <SetupNotice />
             )}
           </div>
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            계정 발급·비밀번호 초기화는 대표(관리자)에게 요청하세요.
-          </p>
+          <div className="mt-6 space-y-1 text-center text-xs text-muted-foreground">
+            <p>한 번 로그인하면 이 휴대폰·컴퓨터에서는 로그아웃하기 전까지 자동으로 로그인됩니다.</p>
+            <p>여러 사람이 같이 쓰는 컴퓨터에서는 사용 후 꼭 로그아웃하세요.</p>
+            <p>계정 발급·비밀번호 초기화는 대표(관리자)에게 요청하세요.</p>
+          </div>
         </div>
       </main>
     </div>

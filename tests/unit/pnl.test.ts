@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { combinePnl, computeStorePnl, monthRange, prevMonth, type ExpenseItem } from "@/lib/pnl";
 import type { SaleRow } from "@/lib/sales/summary";
+import { guessCategoryCode } from "@/lib/expense-hints";
 import { eachDay } from "@/lib/period";
 
 const A = "store-a";
@@ -138,5 +139,21 @@ describe("월 손익", () => {
   it("월 계산", () => {
     expect(prevMonth("2026-01")).toBe("2025-12");
     expect(monthRange("2026-02")).toEqual({ start: "2026-02-01", end: "2026-02-28" });
+  });
+});
+
+describe("지출 항목 추측 (오입력 방지)", () => {
+  it("실제 사례: 거래처에 '임대료' → 임대료 항목", () => {
+    expect(guessCategoryCode("임대료")?.code).toBe("rent");
+    expect(guessCategoryCode("10월 월세")?.code).toBe("rent");
+  });
+  it("가장 구체적인 단어 우선 ('건물 관리비' → 관리비)", () => {
+    expect(guessCategoryCode("건물 관리비")?.code).toBe("maintenance");
+    expect(guessCategoryCode("한전 9월분")?.code).toBe("utilities");
+    expect(guessCategoryCode("부가세 2기 예정")?.code).toBe("tax");
+  });
+  it("모르는 거래처는 추측하지 않음", () => {
+    expect(guessCategoryCode("청수상사")).toBeNull();
+    expect(guessCategoryCode("")).toBeNull();
   });
 });

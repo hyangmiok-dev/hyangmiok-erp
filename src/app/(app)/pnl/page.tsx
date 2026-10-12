@@ -10,7 +10,6 @@ import { listCategories, listExpenses, listInventory } from "@/lib/data/expenses
 import { formatKRW, formatPercent, seoulDateKey, type Ratio } from "@/lib/format";
 import { addDays } from "@/lib/period";
 import {
-  combinePnl,
   computeStorePnl,
   isMonthKey,
   monthRange,
@@ -123,9 +122,10 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
 
   const stores = (await listAccessibleStores()).filter((s) => s.isActive && canViewStorePnl(user, s.id));
   if (!stores.length) return <EmptyState title="손익을 볼 수 있는 지점이 없습니다" />;
+  // 지점별로 따로 관리 (대표 결정 2026-10-13): 합계 없이 한 지점씩 본다
   const storeParam = first(sp.store);
-  const selected = stores.find((s) => s.id === storeParam) ?? null;
-  const shown = selected ? [selected] : stores;
+  const selected = stores.find((s) => s.id === storeParam) ?? stores[0];
+  const shown = [selected];
   const ids = shown.map((s) => s.id);
 
   const range = monthRange(month);
@@ -141,30 +141,7 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
   const perStore = shown.map((s) =>
     computeStorePnl({ storeId: s.id, month: month!, today, sales, expenses, inventory }),
   );
-  const total = combinePnl(perStore);
   const cols: Col[] = perStore.map((p, i) => storeCol(p, shown[i].name.replace("향미옥 ", "")));
-  if (shown.length > 1) {
-    cols.push({
-      key: "total",
-      title: "합계",
-      netSales: total.netSales,
-      salesNote: total.salesComplete ? null : "일부 미입력",
-      begin: perStore.every((p) => p.beginInventory !== null) ? perStore.reduce((n, p) => n + p.beginInventory!, 0) : null,
-      purchases: total.purchases,
-      end: perStore.every((p) => p.endInventory !== null) ? perStore.reduce((n, p) => n + p.endInventory!, 0) : null,
-      cogs: total.cogs,
-      cogsBasis: total.cogsBasis,
-      labor: total.labor,
-      opex: total.opex,
-      excluded: total.excluded,
-      lines: total.lines,
-      operatingProfit: total.operatingProfit,
-      cogsRate: total.cogsRate,
-      laborRate: total.laborRate,
-      operatingMargin: total.operatingMargin,
-      status: total.status,
-    });
-  }
   const head = cols[cols.length - 1];
   const catOrder = new Map(categories.map((c, i) => [c.id, i]));
   const linesOf = (section: Section) =>
@@ -217,14 +194,14 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
           </Link>
         </div>
         {stores.length > 1 && (
-          <div className="flex flex-wrap gap-1">
-            {[{ id: undefined, name: "전체" }, ...stores].map((s) => (
+          <div className="flex flex-wrap gap-1" role="tablist" aria-label="지점">
+            {stores.map((s) => (
               <Link
                 key={s.id ?? "all"}
                 href={qs({ store: s.id })}
                 className={cn(
                   "flex h-10 items-center rounded-full border px-4 text-sm",
-                  (selected?.id ?? undefined) === s.id ? "border-foreground bg-foreground text-background" : "bg-background",
+                  selected.id === s.id ? "border-foreground bg-foreground text-background" : "bg-background",
                 )}
               >
                 {s.name.replace("향미옥 ", "")}
@@ -251,7 +228,7 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
           <p className="font-semibold">{head.status === "confirmed" ? "확정 손익" : "추정 손익 — 아래 이유로 실제와 다를 수 있습니다"}</p>
           {head.status !== "confirmed" && (
             <ul className="mt-1 list-disc pl-5">
-              {(shown.length > 1 ? total.reasons : perStore[0].reasons).map((r) => (
+              {perStore[0].reasons.map((r) => (
                 <li key={r}>{r}</li>
               ))}
             </ul>

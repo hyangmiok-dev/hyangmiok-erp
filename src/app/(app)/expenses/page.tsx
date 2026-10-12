@@ -40,14 +40,14 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
   const stores = (await listAccessibleStores()).filter((s) => s.isActive);
   if (!stores.length) return <EmptyState title="지점이 없습니다" />;
   const storeParam = first(sp.store);
-  const store = stores.find((s) => s.id === storeParam) ?? null; // null = 전체
+  const store = stores.find((s) => s.id === storeParam) ?? stores[0]; // 지점별로 따로 관리
   const q = (first(sp.q) ?? "").trim();
   const editId = first(sp.edit);
 
   const range = monthRange(month);
   const [categories, expenses, vendors, editing] = await Promise.all([
     listCategories(),
-    listExpenses(range, store ? [store.id] : undefined),
+    listExpenses(range, [store.id]),
     recentVendors(),
     editId ? getExpense(editId) : Promise.resolve(null),
   ]);
@@ -55,7 +55,6 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
   const filtered = q
     ? expenses.filter((e) => `${e.vendor ?? ""} ${e.description ?? ""} ${e.categoryName}`.includes(q))
     : expenses;
-  const storeName = new Map(stores.map((s) => [s.id, s.name]));
   const sectionTotal = (s: Section) => filtered.filter((e) => e.section === s).reduce((n, e) => n + e.amount, 0);
   const estimatedCount = filtered.filter((e) => e.basis === "estimated").length;
 
@@ -74,7 +73,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
         title="지출 입력"
         description="재료 매입은 거래명세표가 들어올 때마다, 월세·공과금은 낼 때 입력하세요. 모든 금액은 부가세 포함."
         actions={
-          <Link href={`/pnl?month=${month}${store ? `&store=${store.id}` : ""}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <Link href={`/pnl?month=${month}&store=${store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
             손익 보기
           </Link>
         }
@@ -87,7 +86,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
           stores={stores.map((s) => ({ id: s.id, name: s.name }))}
           categories={categories}
           vendors={vendors}
-          defaultStoreId={store?.id ?? stores[0].id}
+          defaultStoreId={store.id}
           defaultDate={defaultDate}
           today={today}
           editing={
@@ -128,13 +127,13 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
           </Link>
         </div>
         <div className="flex flex-wrap gap-1">
-          {[{ id: undefined, name: "전체" }, ...stores].map((s) => (
+          {stores.map((s) => (
             <Link
               key={s.id ?? "all"}
               href={qs({ store: s.id })}
               className={cn(
                 "flex h-10 items-center rounded-full border px-4 text-sm",
-                (store?.id ?? undefined) === s.id ? "border-foreground bg-foreground text-background" : "bg-background",
+                store.id === s.id ? "border-foreground bg-foreground text-background" : "bg-background",
               )}
             >
               {s.name.replace("향미옥 ", "")}
@@ -163,7 +162,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
           </div>
         ))}
       </div>
-      {store && month <= thisMonth && (
+      {month <= thisMonth && (
         <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           <CopyRecurringButton storeId={store.id} month={month} storeName={store.name} />
           매달 같은 월세·관리비·급여는 지난달 것을 불러와서 금액만 고치면 됩니다.
@@ -189,7 +188,6 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
                 <span className="font-medium">{e.vendor ?? e.categoryName}</span>{" "}
                 <span className="text-muted-foreground">
                   · {e.categoryName}
-                  {!store && ` · ${storeName.get(e.storeId)?.replace("향미옥 ", "")}`}
                   {e.description && ` · ${e.description}`}
                 </span>
               </span>
