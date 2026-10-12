@@ -81,9 +81,11 @@ function RoleSelect(props: { value?: Role; defaultValue?: Role; disabled?: boole
       disabled={props.disabled}
       onChange={(e) => props.onChange?.(e.target.value as Role)}
     >
-      {ROLES.map((r) => (
+      {/* 가장 많이 만드는 '일반 직원'을 맨 위에 */}
+      {[...ROLES].reverse().map((r) => (
         <option key={r} value={r}>
           {ROLE_LABEL[r]}
+          {r === "staff" ? " — 생년월일 비밀번호" : " — 10자 이상 비밀번호"}
         </option>
       ))}
     </NativeSelect>
