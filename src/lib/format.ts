@@ -17,6 +17,24 @@ export function formatKRW(value: number | null | undefined): string {
   return `${krw.format(Math.round(value))}원`;
 }
 
+/** 1234000 → '123만 4,000원' (큰 금액 입력 시 0 개수 실수 방지용) */
+export function formatKoreanWon(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return MISSING_LABEL;
+  const v = Math.round(value);
+  if (v === 0) return "0원";
+  const sign = v < 0 ? "-" : "";
+  let n = Math.abs(v);
+  const eok = Math.floor(n / 100_000_000);
+  n %= 100_000_000;
+  const man = Math.floor(n / 10_000);
+  const rest = n % 10_000;
+  const parts: string[] = [];
+  if (eok) parts.push(`${eok.toLocaleString("ko-KR")}억`);
+  if (man) parts.push(`${man.toLocaleString("ko-KR")}만`);
+  if (rest) parts.push(rest.toLocaleString("ko-KR"));
+  return `${sign}${parts.join(" ")}원`;
+}
+
 export function formatNumber(value: number | null | undefined, maxFractionDigits = 0): string {
   if (value === null || value === undefined || Number.isNaN(value)) return MISSING_LABEL;
   return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: maxFractionDigits }).format(value);

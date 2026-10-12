@@ -61,7 +61,7 @@ export function requiresStoreMembership(role: Role): boolean {
 // ---------------------------------------------------------------------
 
 /** 현재 구현이 완료된 개발 단계. 이보다 큰 단계의 메뉴는 '준비 중'으로 표시된다. */
-export const CURRENT_STAGE = 1;
+export const CURRENT_STAGE = 2;
 
 export type NavIcon =
   | "home"

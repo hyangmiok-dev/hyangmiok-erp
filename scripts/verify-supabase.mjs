@@ -35,13 +35,17 @@ const { error: colErr } = await admin.from("profiles").select("must_change_passw
 if (colErr) bad(`1단계 보완 마이그레이션(20261013000100) 미적용: ${colErr.message}`);
 else ok("1단계 보완 마이그레이션 적용됨 (이름 아이디·첫 비밀번호 변경)");
 
+const { error: salesErr } = await admin.from("daily_sales").select("id").limit(1);
+if (salesErr) bad(`2단계 마이그레이션(20261013000200 매출) 미적용: ${salesErr.message}`);
+else ok("2단계 마이그레이션 적용됨 (일별 매출)");
+
 const { data: allProfiles } = await admin.from("profiles").select("role, is_active");
 const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 200 });
 ok(`Auth 사용자 ${authUsers?.users?.length ?? "?"}명 / 프로필 ${allProfiles?.length ?? "?"}개`);
 
 console.log("2) 비로그인(공개 키)으로는 데이터가 차단되는지");
 const anon = createClient(url, pub, { auth: { persistSession: false } });
-for (const table of ["stores", "profiles", "store_members", "audit_logs"]) {
+for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches"]) {
   const { data, error } = await anon.from(table).select("*").limit(1);
   if (error || (data ?? []).length === 0) ok(`${table}: 차단됨${error ? ` (${error.code ?? error.message})` : " (0행)"}`);
   else bad(`${table}: 비로그인 상태에서 데이터가 보임!`);
