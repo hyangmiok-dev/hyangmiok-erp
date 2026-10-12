@@ -21,7 +21,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DashboardFilters } from "./filters";
 import { StatTile } from "./stat-tile";
-import { StoreBarChart, TrendLineChart, seriesColor } from "./charts";
+import { StoreBarChart, TrendLineChart } from "./charts";
+import { seriesColor } from "./series-color";
 
 type SP = Record<string, string | string[] | undefined>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -145,7 +146,7 @@ export async function Dashboard({ searchParams }: { searchParams: SP }) {
             label="이번 달 누적"
             value={sMtd.netSales === null ? MISSING_LABEL : formatKRW(sMtd.netSales)}
             muted={sMtd.netSales === null}
-            sub={sMtd.complete ? "빠짐없이 입력됨" : `미입력 ${sMtd.missing.length}칸 (부분 합계)`}
+            sub={sMtd.complete ? "빠짐없이 입력됨" : sMtd.entered === 0 ? "이번 달 입력 없음" : `미입력 ${sMtd.missing.length}칸 (입력된 날만 합계)`}
           />
           <StatTile
             label="지난달 같은 기간 대비"
