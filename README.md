@@ -59,23 +59,19 @@ npm run dev
 
 ---
 
-## 인터넷에 배포하기 (Vercel)
+## 인터넷 주소 (운영 중)
 
-1. https://github.com 에 가입 → 새 **Private** 저장소를 만들고 이 폴더를 올립니다.
-2. https://vercel.com 에 GitHub 계정으로 가입 → **Add New → Project** → 저장소 선택.
-3. **Environment Variables** 에 `.env.local` 의 값을 그대로 입력합니다.
-   - 운영용이면 **운영용 Supabase 프로젝트(hyangmiok-prod)** 의 값을 넣고 `NEXT_PUBLIC_APP_ENV=production`
-4. **Deploy** → 완료되면 `https://○○○.vercel.app` 주소가 생깁니다.
-5. Supabase → **Authentication → URL Configuration → Site URL** 에 위 주소를 입력합니다.
+**https://hyangmiok.netlify.app**
 
-> 상업적으로 운영할 때는 Vercel **Pro**, Supabase **Pro**(자동 백업 포함) 사용을 권장합니다. 비용은 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#1-2-예상-운영비-2026년-공개-요금-기준-추정--가입-시-재확인-필요) 참고.
+- 무료 호스팅 **Netlify**(사업용 무료 허용)에 올라가 있습니다. 매달 300포인트가 무료로 주어지고, **새 버전을 올릴 때마다 15포인트**가 듭니다.
+- 그래서 프로그램을 고칠 때마다 바로 올리지 않고, 모아서 주 1~2회만 올립니다 (커밋 메시지에 `[deploy]` 를 넣을 때만 올라감 — `netlify.toml` 참고).
+- Supabase 연결 정보(열쇠 3개)는 Netlify → **환경 변수**에 들어 있습니다. 바꾸면 다시 올려야 반영됩니다.
+- Netlify 화면에서 포인트 사용량을 확인할 수 있습니다. 포인트를 다 쓰면 다음 달까지 사이트가 멈추니, 70% 이상 쓰면 알려주세요.
 
-### 운영용 데이터베이스 준비 순서
-개발용과 똑같이 2단계를 `hyangmiok-prod` 프로젝트에 한 번 더 진행합니다.
-**연습용으로 넣은 데이터가 실제 실적과 섞이지 않도록** 운영용에는 연습 데이터를 넣지 마세요.
-
----
-
+### 휴대폰 홈 화면에 앱처럼 추가하기
+- **아이폰(사파리)**: 주소 열기 → 아래 가운데 **공유 버튼(네모에 화살표)** → **홈 화면에 추가**
+- **갤럭시(크롬·삼성인터넷)**: 주소 열기 → 오른쪽 위 **⋮ (점 3개)** → **홈 화면에 추가**
+- 한 번 로그인하면 로그아웃하기 전까지 자동 로그인됩니다.
 ## 사용 설명서
 - 관리자(대표) 사용법: [docs/ADMIN_MANUAL.md](docs/ADMIN_MANUAL.md)
 - 시스템 구조·데이터 설계·개발 계획: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
