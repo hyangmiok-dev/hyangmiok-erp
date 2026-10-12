@@ -39,9 +39,14 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 
 ## DB 변경 절차
 1. `supabase/migrations/YYYYMMDDHHMMSS_설명.sql` 새 파일 추가 (기존 적용된 파일 수정 금지).
-2. `tests/db/` 에 RLS·무결성 테스트 추가 → `npm test` (PGlite 가 실제 SQL 을 실행).
-3. Supabase 적용: 대시보드 SQL Editor 에 붙여넣기 또는 `npx supabase db push`.
+2. `tests/db/` 에 RLS·무결성 테스트 추가 → `node scripts/build-setup-sql.mjs`(새 프로젝트용 통합 SQL 갱신) → `npm test` (PGlite 가 실제 SQL 을 실행, 통합 SQL 불일치도 검사).
+3. Supabase 적용: **개발(hyangmiok-dev)·운영(hyangmiok-prod) 두 프로젝트 모두** SQL Editor 에 새 마이그레이션 파일만 붙여넣기. 적용 확인: `node --env-file=.env.local scripts/verify-supabase.mjs` (로컬은 개발 프로젝트).
 4. 보안 정의 함수는 `security definer` + `set search_path = ''` + 완전한 스키마명. 단, 호출자 역할(`current_user`)이 필요한 트리거는 `security invoker`.
+
+## 배포
+- Vercel(서울 icn1, `vercel.json`) + GitHub 연동: main 에 push 하면 자동 배포.
+- Vercel 환경변수는 **운영 Supabase** 값 + `NEXT_PUBLIC_APP_ENV=production`. 로컬 `.env.local` 은 개발 프로젝트.
+- NEXT_PUBLIC_* 는 빌드 때 박히므로 환경변수 변경 후에는 Redeploy 필요.
 
 ## 폴더
 - `src/app/(app)/` 로그인 후 화면, `src/app/login/` 로그인
