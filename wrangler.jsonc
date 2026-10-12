@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hyangmiok-erp",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // 공개 값(빌드 때도 필요). 비밀 키 SUPABASE_SECRET_KEY 는 여기 넣지 말고
+  // Cloudflare 대시보드(설정 → 변수 및 비밀) 또는 `wrangler secret put` 으로만 등록한다.
+  "vars": {
+    "NEXT_PUBLIC_APP_ENV": "production",
+    "AUTH_LOGIN_ID_DOMAIN": "staff.hyangmiok.invalid"
+  },
+  // 쓰지 않는 OG 이미지 라이브러리 제외 (무료 요금제 3MB 제한) — cloudflare/og-stub.js 참고
+  "alias": {
+    "next/dist/compiled/@vercel/og/index.edge.js": "./cloudflare/og-stub.js",
+    "next/dist/compiled/@vercel/og/index.node.js": "./cloudflare/og-stub.js"
+  },
+  "observability": { "enabled": true }
+}
