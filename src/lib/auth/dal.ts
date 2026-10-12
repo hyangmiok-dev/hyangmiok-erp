@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isEnvConfigured } from "@/lib/env";
 import { isRole, type Role, type SessionUser } from "@/lib/auth/roles";
@@ -17,6 +18,8 @@ export const CHANGE_PASSWORD_PATH = "/change-password";
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   // 환경변수 미설정이면 비로그인 취급 → /login 에서 설정 안내를 보여준다.
   if (!isEnvConfigured()) return null;
+  // 세션은 요청마다 다르다: 사전 렌더링 대상이 아님을 명시 (Supabase 가 토큰 만료 확인에 Date.now() 사용)
+  await connection();
   const supabase = await createClient();
   const { data: claimsData, error } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
