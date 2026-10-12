@@ -43,11 +43,16 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 3. Supabase 적용: 운영 프로젝트 SQL Editor 에 **새 마이그레이션 파일만** 붙여넣기 (대표가 실행). 적용 전 PGlite 테스트 통과 필수. 적용 확인: `node --env-file=.env.local scripts/verify-supabase.mjs` (로컬은 개발 프로젝트).
 4. 보안 정의 함수는 `security definer` + `set search_path = ''` + 완전한 스키마명. 단, 호출자 역할(`current_user`)이 필요한 트리거는 `security invoker`.
 
-## 배포
-- Vercel(서울 icn1, `vercel.json`) + GitHub 연동: main 에 push 하면 자동 배포.
-- Vercel 환경변수는 `.env.local` 과 같은 운영 Supabase 값 + `NEXT_PUBLIC_APP_ENV=production`.
-- NEXT_PUBLIC_* 는 빌드 때 박히므로 환경변수 변경 후에는 Redeploy 필요.
-
+## 배포 (Netlify 무료 — 대표 결정 2026-10-13)
+- GitHub `hyangmiok-dev/hyangmiok-erp` 의 main 이 Netlify 운영 브랜치. **무료는 성공한 운영 배포 1번 = 15포인트(월 300)**.
+- `netlify.toml` 의 `ignore` 때문에 **커밋 메시지에 `[deploy]` 가 있을 때만 배포**된다. 평소 커밋은 건너뜀(포인트 0).
+  배포할 때: `git commit --allow-empty -m "[deploy] 배포: 무엇을 바꿨는지"` → `git push`. 주 1~2회로 모아서.
+- 환경변수(Netlify 화면에서 대표가 입력): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`. `NEXT_PUBLIC_APP_ENV=production` 은 netlify.toml.
+  NEXT_PUBLIC_* 는 빌드 때 박히므로 값을 바꾸면 다시 배포해야 반영된다.
+- 이 셸(Claude)에서는 git 로그인 창을 못 띄운다 → 처음 push 는 터미널 탭에서 `git -c credential.gitHubAuthModes=device push` 로 대표가 코드 입력. 이후 push 는 저장된 인증으로 동작.
+- Cloudflare Workers 설정(`wrangler.jsonc`, `open-next.config.ts`, `cloudflare/postbuild.mjs`, `npm run cf:*`)은 예비용으로 남겨 둠. 무료 플랜 CPU 10ms 제한 때문에 보류.
+  Cache Components 는 Cloudflare(workerd) 호환 문제로 꺼 둠 (`next.config.ts` 주석).
+- Vercel 은 무료(Hobby)가 비상업 전용이라 사용하지 않음.
 ## 폴더
 - `src/app/(app)/` 로그인 후 화면, `src/app/login/` 로그인
 - `src/lib/auth/` 권한 규칙·DAL, `src/lib/data/` 조회(server-only), `src/lib/validation/` Zod
