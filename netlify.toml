@@ -1,0 +1,19 @@
+# Netlify 배포 설정 (무료 요금제, 2026-10-13 대표 결정)
+#
+# 포인트 아끼기: Netlify 무료는 '실제 배포 1번 = 15포인트'(월 300포인트).
+# → 운영 배포는 `release` 브랜치에 올릴 때만 일어나게 한다 (Netlify 의 Production branch = release).
+#   평소 개발은 main 에 올리고, 모아서 주 1~2회 `git push origin main:release` 로 배포.
+#
+# 비밀값(SUPABASE_SECRET_KEY)과 Supabase 주소·공개 키는 이 파일에 넣지 않고
+# Netlify 화면(Site configuration → Environment variables)에만 넣는다.
+# 로그인 아이디 도메인(AUTH_LOGIN_ID_DOMAIN)은 코드 기본값(staff.hyangmiok.invalid)을 쓴다.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # 화면 상단 '테스트 환경' 띠를 끈다 (빌드 때 코드에 박힘)
+  NEXT_PUBLIC_APP_ENV = "production"
+  NEXT_TELEMETRY_DISABLED = "1"
