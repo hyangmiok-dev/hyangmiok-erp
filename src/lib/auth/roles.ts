@@ -47,6 +47,13 @@ export function canViewStoreFinancials(user: Pick<SessionUser, "role" | "storeId
   return canManageStore(user, storeId);
 }
 
+/** app.can_view_store_pnl 와 동일: 지출·손익은 대표 전체, 본사 관리자는 소속 지점만 */
+export function canViewStorePnl(user: Pick<SessionUser, "role" | "storeIds">, storeId: string): boolean {
+  if (user.role === "owner") return true;
+  if (user.role === "hq_manager") return user.storeIds.includes(storeId);
+  return false;
+}
+
 export function isManager(role: Role): boolean {
   return role === "owner" || role === "hq_manager" || role === "store_manager";
 }
@@ -61,7 +68,7 @@ export function requiresStoreMembership(role: Role): boolean {
 // ---------------------------------------------------------------------
 
 /** 현재 구현이 완료된 개발 단계. 이보다 큰 단계의 메뉴는 '준비 중'으로 표시된다. */
-export const CURRENT_STAGE = 2;
+export const CURRENT_STAGE = 3;
 
 export type NavIcon =
   | "home"
@@ -72,6 +79,7 @@ export type NavIcon =
   | "inventory"
   | "recipe"
   | "compare"
+  | "expense"
   | "store"
   | "users"
   | "audit";
@@ -95,7 +103,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/inventory", label: "재고·발주", icon: "inventory", roles: ALL, stage: 5, group: "업무" },
   { href: "/production", label: "레시피·육수 생산", icon: "recipe", roles: MANAGERS, stage: 5, group: "업무" },
   { href: "/staff", label: "직원·근태", icon: "staff", roles: MANAGERS, stage: 4, group: "업무" },
-  { href: "/pnl", label: "손익·지출", icon: "pnl", roles: MANAGERS, stage: 3, group: "분석" },
+  { href: "/expenses", label: "지출 입력", icon: "expense", roles: ["owner"], stage: 3, group: "업무" },
+  { href: "/pnl", label: "손익", icon: "pnl", roles: ["owner", "hq_manager"], stage: 3, group: "분석" },
   { href: "/compare", label: "지점 비교", icon: "compare", roles: ["owner", "hq_manager"], stage: 6, group: "분석" },
   { href: "/admin/stores", label: "지점 설정", icon: "store", roles: ["owner"], stage: 2, group: "관리" },
   { href: "/admin/users", label: "계정 관리", icon: "users", roles: ["owner"], stage: 1, group: "관리" },

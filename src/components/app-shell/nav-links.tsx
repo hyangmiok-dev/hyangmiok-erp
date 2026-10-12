@@ -10,6 +10,7 @@ import {
   History,
   Home,
   ReceiptText,
+  HandCoins,
   Store,
   UserCog,
   Users,
@@ -29,6 +30,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   recipe: CookingPot,
   compare: BarChart3,
   store: Store,
+  expense: HandCoins,
   users: UserCog,
   audit: History,
 };

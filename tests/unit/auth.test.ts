@@ -3,6 +3,7 @@ import {
   canAccessStore,
   canManageStore,
   canViewStoreFinancials,
+  canViewStorePnl,
   navItemsFor,
   NAV_ITEMS,
 } from "@/lib/auth/roles";
@@ -37,6 +38,16 @@ describe("역할 권한 (DB app.* 함수와 동일해야 함)", () => {
     expect(canAccessStore(s, S1)).toBe(true);
     expect(canManageStore(s, S1)).toBe(false);
     expect(canViewStoreFinancials(s, S1)).toBe(false);
+  });
+});
+
+describe("손익·지출 조회 (DB app.can_view_store_pnl 과 동일)", () => {
+  it("대표 전체, 본사 관리자는 소속 지점, 지점 관리자·직원 불가", () => {
+    expect(canViewStorePnl({ role: "owner", storeIds: [] }, S2)).toBe(true);
+    expect(canViewStorePnl({ role: "hq_manager", storeIds: [S1] }, S1)).toBe(true);
+    expect(canViewStorePnl({ role: "hq_manager", storeIds: [S1] }, S2)).toBe(false);
+    expect(canViewStorePnl({ role: "store_manager", storeIds: [S1] }, S1)).toBe(false);
+    expect(canViewStorePnl({ role: "staff", storeIds: [S1] }, S1)).toBe(false);
   });
 });
 

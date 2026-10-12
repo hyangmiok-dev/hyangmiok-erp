@@ -36,7 +36,7 @@ async function Home({ searchParams }: { searchParams: PageProps<"/">["searchPara
           </Link>
         }
       />
-      <Dashboard searchParams={sp} />
+      <Dashboard searchParams={sp} user={user} />
     </>
   );
 }

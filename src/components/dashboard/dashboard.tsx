@@ -2,6 +2,9 @@ import Link from "next/link";
 import { AlertTriangle, OctagonAlert } from "lucide-react";
 import { listAccessibleStores } from "@/lib/data/stores";
 import { listSales } from "@/lib/data/sales";
+import { listExpenses, listInventory } from "@/lib/data/expenses";
+import { canViewStorePnl, type SessionUser } from "@/lib/auth/roles";
+import { combinePnl, computeStorePnl, monthRange, prevMonth } from "@/lib/pnl";
 import {
   addDays,
   eachDay,
@@ -15,7 +18,7 @@ import {
   type DateRange,
 } from "@/lib/period";
 import { compare, formatChange, storeAlerts, summarize, type Change } from "@/lib/sales/summary";
-import { formatDateTimeKo, formatKRW, formatNumber, formatRatio, MISSING_LABEL, safeDivide, seoulDateKey } from "@/lib/format";
+import { formatDateTimeKo, formatKRW, formatNumber, formatPercent, formatRatio, MISSING_LABEL, safeDivide, seoulDateKey } from "@/lib/format";
 import { EmptyState } from "@/components/states";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -31,7 +34,7 @@ function changeTone(c: Change): "up" | "down" | undefined {
   return c.status === "ok" ? (c.value > 0 ? "up" : c.value < 0 ? "down" : undefined) : undefined;
 }
 
-export async function Dashboard({ searchParams }: { searchParams: SP }) {
+export async function Dashboard({ searchParams, user }: { searchParams: SP; user: SessionUser }) {
   const today = seoulDateKey();
   const allStores = await listAccessibleStores();
   // 색은 전체 지점 순서로 고정 (필터해도 같은 지점은 같은 색)
@@ -103,6 +106,21 @@ export async function Dashboard({ searchParams }: { searchParams: SP }) {
     }
     return point;
   });
+
+  // 이번 달 손익 (대표·본사 관리자만, 지출 권한이 있는 지점만)
+  const pnlStores = stores.filter((s) => canViewStorePnl(user, s.id));
+  const month = today.slice(0, 7);
+  let pnl: ReturnType<typeof combinePnl> | null = null;
+  if (pnlStores.length) {
+    const pIds = pnlStores.map((s) => s.id);
+    const [exps, inv] = await Promise.all([
+      listExpenses({ start: monthRange(prevMonth(month)).start, end: today }, pIds),
+      listInventory([addDays(mtd.start, -1), monthRange(month).end], pIds),
+    ]);
+    pnl = combinePnl(
+      pIds.map((id) => computeStorePnl({ storeId: id, month, today, sales, expenses: exps, inventory: inv })),
+    );
+  }
 
   const enteredLabel = (e: number, total: number) => `${total}칸 중 ${e}칸 입력${e < total ? ` · ${total - e}칸 미입력` : ""}`;
   const alertCount = perStore.reduce((n, p) => n + p.alerts.length, 0);
@@ -327,12 +345,41 @@ export async function Dashboard({ searchParams }: { searchParams: SP }) {
         </section>
       )}
 
-      {/* 3단계 지표 */}
-      <section className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {["식재료 원가율", "인건비율", "추정 영업이익"].map((k) => (
-          <StatTile key={k} label={k} value="준비 중" muted sub="3단계(지출·인건비 입력) 후 계산됩니다" />
-        ))}
-      </section>
+      {/* 이번 달 손익 */}
+      {pnl && (
+        <section aria-labelledby="pnl-h" className="mb-8">
+          <h2 id="pnl-h" className="mb-3 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            이번 달 손익 ({rangeLabel(mtd)}){" "}
+            <Link href="/pnl" className="font-normal underline underline-offset-2">
+              자세히
+            </Link>
+          </h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatTile
+              label={pnl.cogsBasis === "actual" ? "식재료 원가율" : "식재료 원가율 (추정)"}
+              value={formatPercent(pnl.cogsRate)}
+              muted={pnl.cogsRate.status !== "ok"}
+              sub={`매출원가 ${formatKRW(pnl.cogs)}`}
+            />
+            <StatTile
+              label="인건비율"
+              value={formatPercent(pnl.laborRate)}
+              muted={pnl.laborRate.status !== "ok"}
+              sub={`인건비 ${formatKRW(pnl.labor)}`}
+            />
+            <StatTile
+              label={pnl.status === "confirmed" ? "영업이익" : "추정 영업이익"}
+              value={formatKRW(pnl.operatingProfit)}
+              muted={pnl.operatingProfit === null}
+              tone={pnl.operatingProfit !== null ? (pnl.operatingProfit >= 0 ? "up" : "down") : undefined}
+              sub={`이익률 ${formatPercent(pnl.operatingMargin)}`}
+            />
+          </div>
+          {pnl.status !== "confirmed" && (
+            <p className="mt-2 text-xs text-muted-foreground">추정 이유: {pnl.reasons.join(" · ")}</p>
+          )}
+        </section>
+      )}
 
       <footer className="border-t pt-4 text-xs text-muted-foreground">
         데이터 출처: 지점 관리자가 POS 마감 영수증을 보고 입력한 실매출·건수 (CSV 업로드 포함) ·{" "}
