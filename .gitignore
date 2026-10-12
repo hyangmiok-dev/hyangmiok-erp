@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Netlify
 .netlify/
+
+# Supabase CLI 임시 파일
+supabase/.temp/
