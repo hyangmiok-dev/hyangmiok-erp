@@ -24,6 +24,7 @@ export const vendorInputSchema = z.object({
     .transform((v) => v || null),
   memo: optText(500, "메모"),
   isActive: z.boolean(),
+  onCredit: z.boolean(),
   storeIds: z.array(z.uuid()).max(50),
 });
 
@@ -40,6 +41,7 @@ export function vendorFormToObject(fd: FormData) {
     phone: s("phone"),
     memo: s("memo"),
     isActive: fd.get("isActive") === "on",
+    onCredit: fd.get("onCredit") === "on",
     storeIds: fd.getAll("storeIds").map(String),
   };
 }

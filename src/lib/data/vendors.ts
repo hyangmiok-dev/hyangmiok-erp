@@ -11,6 +11,8 @@ export interface VendorRow {
   memo: string | null;
   sortOrder: number;
   isActive: boolean;
+  /** 외상(나중에 결제) 거래처 → 지출 입력 시 미수로 잡기 기본값 */
+  onCredit: boolean;
   /** 거래 지점 (RLS: 본사 관리자는 소속 지점 연결만 보인다) */
   storeIds: string[];
   updatedAt: string;
@@ -22,7 +24,7 @@ export async function listVendors(): Promise<VendorRow[]> {
   const [{ data: vendors, error }, { data: links, error: lErr }] = await Promise.all([
     supabase
       .from("vendors")
-      .select("id, name, default_category_id, items, contact_name, phone, memo, sort_order, is_active, updated_at")
+      .select("id, name, default_category_id, items, contact_name, phone, memo, sort_order, is_active, on_credit, updated_at")
       .order("sort_order")
       .order("name"),
     supabase.from("vendor_stores").select("vendor_id, store_id"),
@@ -42,6 +44,7 @@ export async function listVendors(): Promise<VendorRow[]> {
     memo: v.memo,
     sortOrder: v.sort_order,
     isActive: v.is_active,
+    onCredit: v.on_credit,
     storeIds: byVendor.get(v.id) ?? [],
     updatedAt: v.updated_at,
   }));

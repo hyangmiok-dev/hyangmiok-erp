@@ -51,6 +51,7 @@ async function Vendors({ searchParams }: { searchParams: PageProps<"/admin/vendo
     phone: v.phone,
     memo: v.memo,
     isActive: v.isActive,
+    onCredit: v.onCredit,
     storeIds: v.storeIds,
   });
 
@@ -104,6 +105,7 @@ async function Vendors({ searchParams }: { searchParams: PageProps<"/admin/vendo
                 <p className="flex flex-wrap items-center gap-2 font-semibold">
                   {v.name}
                   {!v.isActive && <Badge variant="outline">거래 중지</Badge>}
+                  {v.onCredit ? <Badge variant="outline">외상</Badge> : <Badge variant="outline">바로 결제</Badge>}
                   {v.storeIds.length === 0 && <Badge variant="outline">거래 지점 없음</Badge>}
                   {v.storeIds.map((id) => (
                     <Badge key={id} variant="secondary">

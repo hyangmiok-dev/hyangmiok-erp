@@ -13,6 +13,7 @@ import type { ActionResult } from "@/lib/validation/users";
 import { guessCategoryCode } from "@/lib/expense-hints";
 import { cn } from "@/lib/utils";
 import { saveExpenseAction } from "./actions";
+import { LineItemsEditor, emptyLine, linesTotal, serializeLines, type ItemSuggestion, type LineDraft } from "./line-items";
 
 export interface CategoryOption {
   id: string;
@@ -27,6 +28,7 @@ export interface VendorOption {
   name: string;
   items: string | null;
   defaultCategoryId: string | null;
+  onCredit: boolean;
   storeIds: string[];
 }
 
@@ -40,6 +42,8 @@ export interface EditingExpense {
   description: string | null;
   amount: number;
   basis: "actual" | "estimated";
+  onCredit: boolean;
+  lines: { itemName: string; quantity: number; unit: string | null; unitPrice: number; amount: number }[];
   updatedAt: string;
 }
 
@@ -50,6 +54,7 @@ export function ExpenseForm({
   categories,
   vendors,
   vendorList,
+  itemSuggestions,
   defaultStoreId,
   defaultDate,
   today,
@@ -61,6 +66,8 @@ export function ExpenseForm({
   vendors: string[];
   /** 거래처 관리 목록 (거래 중인 것만) */
   vendorList: VendorOption[];
+  /** 거래처별 최근 품목 (이름·단위·지난 단가) */
+  itemSuggestions: Record<string, ItemSuggestion[]>;
   defaultStoreId: string;
   defaultDate: string;
   today: string;
@@ -76,26 +83,44 @@ export function ExpenseForm({
   const [storeId, setStoreId] = useState(editing?.storeId ?? defaultStoreId);
   const [vendor, setVendor] = useState(editing?.vendor ?? "");
   const [vendorId, setVendorId] = useState(editing?.vendorId ?? "");
+  const [onCredit, setOnCredit] = useState(editing?.onCredit ?? false);
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [lines, setLines] = useState<LineDraft[]>(
+    () =>
+      editing?.lines.map((l) => ({
+        ...emptyLine(),
+        itemName: l.itemName,
+        quantity: String(l.quantity),
+        unit: l.unit ?? "",
+        unitPrice: String(l.unitPrice),
+        amount: String(l.amount),
+        amountEdited: true,
+      })) ?? [],
+  );
+
   const storeVendors = vendorList.filter((v) => v.storeIds.includes(storeId));
   const storeName = stores.find((s) => s.id === storeId)?.name ?? "";
-
-  function pickVendor(v: VendorOption) {
-    setVendor(v.name);
-    setVendorId(v.id);
-    if (v.defaultCategoryId) setCategoryId(v.defaultCategoryId);
-    (document.getElementById("amount") as HTMLInputElement | null)?.focus();
-  }
-
-  function typeVendor(text: string) {
-    setVendor(text);
-    setVendorId(vendorList.find((v) => v.name === text.trim())?.id ?? "");
-  }
-  const [description, setDescription] = useState(editing?.description ?? "");
+  const hasLines = lines.length > 0;
+  const total = hasLines ? String(linesTotal(lines)) : amount;
   const fe = state.fieldErrors ?? {};
   const cat = categories.find((c) => c.id === categoryId);
   const guess = guessCategoryCode(`${vendor} ${description}`);
   const guessed = guess ? categories.find((c) => c.code === guess.code) : undefined;
   const mismatch = guessed && cat && guessed.id !== cat.id ? guessed : undefined;
+
+  function pickVendor(v: VendorOption) {
+    setVendor(v.name);
+    setVendorId(v.id);
+    setOnCredit(v.onCredit);
+    if (v.defaultCategoryId) setCategoryId(v.defaultCategoryId);
+  }
+
+  function typeVendor(text: string) {
+    setVendor(text);
+    const match = vendorList.find((v) => v.name === text.trim());
+    setVendorId(match?.id ?? "");
+    if (!match) setOnCredit(false);
+  }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -112,15 +137,16 @@ export function ExpenseForm({
         return;
       }
       toast.success(r.message);
-      // 수정이면 목록으로, 새 입력이면 금액만 비우고 다음 입력 준비 (같은 거래처 연속 입력이 많음)
+      // 수정이면 목록으로, 새 입력이면 금액·품목만 비우고 다음 입력 준비 (같은 거래처 연속 입력이 많음)
       if (editing) router.push(cancelHref);
       else {
         setAmount("");
         setDescription("");
-        (document.getElementById("vendor") as HTMLInputElement | null)?.focus();
+        setLines([]);
       }
     });
   }
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       {editing && (
@@ -220,31 +246,67 @@ export function ExpenseForm({
         {fe.categoryId && <p className="mt-1 text-xs text-destructive" role="alert">{fe.categoryId}</p>}
         {cat?.description && <p className="mt-1 text-xs text-muted-foreground">{cat.description}</p>}
       </fieldset>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="거래처 / 받는 사람" htmlFor="vendor" error={fe.vendor} hint="예: 청수상사, 한전, 건물주">
-          <Input id="vendor" name="vendor" list="vendor-list" value={vendor} onChange={(e) => typeVendor(e.target.value)} maxLength={60} autoComplete="off" className="h-10 text-base" />
+          <Input
+            id="vendor"
+            name="vendor"
+            list="vendor-list"
+            value={vendor}
+            onChange={(e) => typeVendor(e.target.value)}
+            maxLength={60}
+            autoComplete="off"
+            className="h-10 text-base"
+          />
           <datalist id="vendor-list">
             {[...new Set([...vendorList.map((v) => v.name), ...vendors])].map((v) => (
               <option key={v} value={v} />
             ))}
           </datalist>
         </Field>
-        <Field label="금액 (부가세 포함)" htmlFor="amount" error={fe.amount}>
+        <Field
+          label={hasLines ? "금액 (품목 합계, 부가세 포함)" : "금액 (부가세 포함)"}
+          htmlFor="amount"
+          error={fe.amount}
+        >
           <div className="relative">
             <Input
               id="amount"
               name="amount"
               inputMode="numeric"
               autoComplete="off"
-              value={amount ? Number(amount).toLocaleString("ko-KR") : ""}
+              readOnly={hasLines}
+              value={total ? Number(total).toLocaleString("ko-KR") : ""}
               onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "").slice(0, 10))}
-              className="h-10 pr-8 text-right text-base font-semibold tabular-nums"
+              className={cn("h-10 pr-8 text-right text-base font-semibold tabular-nums", hasLines && "bg-muted")}
             />
             <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">원</span>
           </div>
-          <p className="text-right text-xs text-muted-foreground">{amount ? formatKoreanWon(Number(amount)) : " "}</p>
+          <p className="text-right text-xs text-muted-foreground">{total ? formatKoreanWon(Number(total)) : " "}</p>
         </Field>
       </div>
+
+      {/* 거래명세표 품목 (선택) */}
+      <fieldset className="rounded-lg border bg-muted/20 p-3">
+        <legend className="px-1 text-sm font-medium">품목 내역 (거래명세표 · 선택)</legend>
+        <input type="hidden" name="lines" value={serializeLines(lines)} />
+        {hasLines ? (
+          <LineItemsEditor
+            lines={lines}
+            onChange={setLines}
+            suggestions={vendorId ? (itemSuggestions[vendorId] ?? []) : []}
+            error={fe.lines}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Button type="button" variant="outline" size="sm" onClick={() => setLines([emptyLine()])}>
+              + 품목 적기
+            </Button>
+            품목·수량·단가를 적어두면 거래처 원장에서 날짜별로 확인하고, 단가가 오르내리는 것도 볼 수 있어요.
+          </div>
+        )}
+      </fieldset>
 
       <Field label="내용 (선택)" htmlFor="description" error={fe.description}>
         <Input
@@ -257,6 +319,27 @@ export function ExpenseForm({
           className="h-10 text-base"
         />
       </Field>
+
+      <label
+        className={cn(
+          "flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm",
+          onCredit && "border-amber-400 bg-amber-50",
+          !vendorId && "opacity-60",
+        )}
+      >
+        <input
+          type="checkbox"
+          name="onCredit"
+          checked={onCredit}
+          disabled={!vendorId}
+          onChange={(e) => setOnCredit(e.target.checked)}
+          className="size-5"
+        />
+        <span>
+          <b>외상</b> — 아직 결제 안 함 (거래처 미수에 더해져요)
+          {!vendorId && <span className="block text-xs">거래처 버튼으로 고른 거래처만 외상으로 잡을 수 있어요.</span>}
+        </span>
+      </label>
 
       <fieldset className="flex flex-wrap items-center gap-4 text-sm">
         <legend className="sr-only">금액 기준</legend>

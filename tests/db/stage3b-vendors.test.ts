@@ -36,10 +36,10 @@ describe("엑셀에서 가져온 초기 거래처", () => {
     expect(r.rows[0]).toEqual({ n: 18, food: 18 });
   });
 
-  it("1호점 13곳, 2호점 15곳, 3호점 0곳 (엑셀 그대로)", async () => {
+  it("1호점 13곳, 2호점 15곳 (엑셀 그대로), 3호점은 대표 요청으로 18곳 모두 (0500 마이그레이션)", async () => {
     expect(await vendorNames("S1")).toHaveLength(13);
     expect(await vendorNames("S2")).toHaveLength(15);
-    expect(await vendorNames("S3")).toHaveLength(0);
+    expect(await vendorNames("S3")).toHaveLength(18);
   });
 
   it("같은 곳으로 보이는 표기는 합치고 원래 표기를 메모에 남긴다", async () => {
@@ -92,7 +92,7 @@ describe("거래처 권한", () => {
 });
 
 describe("지출에 거래처 연결", () => {
-  it("지출에 vendor_id 를 저장하고, 거래처를 지우면 지출은 남고 연결만 끊긴다", async () => {
+  it("지출에 vendor_id 를 저장하고, 거래 기록이 있는 거래처는 삭제할 수 없다 (원장 보호)", async () => {
     const s1 = await storeId(db, "S1");
     const food = (await db.query<{ id: string }>(`select id from public.expense_categories where code='food'`)).rows[0].id;
     const vid = (await db.query<{ id: string }>(`select id from public.vendors where name='새거래처'`)).rows[0].id;
@@ -103,10 +103,8 @@ describe("지출에 거래처 연결", () => {
         [s1, food, vid],
       ),
     );
-    await asUser(db, OWNER, (tx) => tx.query(`delete from public.vendors where id = $1`, [vid]));
-    const r = await db.query<{ vendor: string; vendor_id: string | null }>(
-      `select vendor, vendor_id from public.expenses where vendor = '새거래처'`,
+    await expect(asUser(db, OWNER, (tx) => tx.query(`delete from public.vendors where id = $1`, [vid]))).rejects.toThrow(
+      /expenses_vendor_id_fkey/,
     );
-    expect(r.rows[0]).toEqual({ vendor: "새거래처", vendor_id: null });
   });
 });

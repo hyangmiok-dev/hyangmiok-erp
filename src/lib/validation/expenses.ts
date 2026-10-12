@@ -21,7 +21,23 @@ const optText = (max: number) =>
     .max(max, `${max}자 이하로 입력하세요.`)
     .transform((v) => v || null);
 
-export const expenseInputSchema = z.object({
+/** 거래명세표 품목 한 줄 (금액은 부가세 포함) */
+export const expenseLineSchema = z.object({
+  itemName: z.string().trim().min(1, "품목 이름을 입력하세요.").max(60, "품목 이름은 60자 이하로 입력하세요."),
+  quantity: z
+    .string()
+    .trim()
+    .refine((v) => /^\d{1,9}(\.\d{1,3})?$/.test(v.replace(/,/g, "")), "수량은 숫자로 입력하세요 (소수점 3자리까지).")
+    .transform((v) => Number(v.replace(/,/g, "")))
+    .refine((v) => v > 0, "수량은 0보다 커야 합니다."),
+  unit: optText(10),
+  unitPrice: won(999_999_999, 0),
+  amount: won(9_999_999_999, 0),
+});
+
+export type ExpenseLineInput = z.output<typeof expenseLineSchema>;
+
+const expenseBaseSchema = z.object({
   id: z.uuid().optional(),
   storeId: z.uuid({ message: "지점을 선택하세요." }),
   expenseDate: dateKey,
@@ -31,8 +47,25 @@ export const expenseInputSchema = z.object({
   description: optText(200),
   amount: won(9_999_999_999),
   basis: z.enum(["actual", "estimated"]),
+  onCredit: z.boolean(),
+  lines: z.array(expenseLineSchema).max(50, "품목은 50줄까지 입력할 수 있습니다."),
   expectedUpdatedAt: z.string().optional(),
 });
+
+/** 품목이 있으면 지출 금액 = 품목 금액 합계 (서버에서 다시 계산) */
+export const expenseInputSchema = z
+  .preprocess((raw) => {
+    const r = raw as Record<string, unknown>;
+    const lines = Array.isArray(r.lines) ? (r.lines as { amount?: string }[]) : [];
+    if (!lines.length) return r;
+    const sum = lines.reduce((n, l) => n + (Number(String(l.amount ?? "").replace(/[,\s원]/g, "")) || 0), 0);
+    return { ...r, amount: String(sum) };
+  }, expenseBaseSchema)
+  .superRefine((v, ctx) => {
+    if (v.onCredit && !v.vendor) {
+      ctx.addIssue({ code: "custom", path: ["vendor"], message: "외상(미수)은 거래처를 골라야 기록할 수 있어요." });
+    }
+  });
 
 export const inventoryInputSchema = z.object({
   storeId: z.uuid(),
@@ -53,6 +86,17 @@ export function expenseFormToObject(fd: FormData) {
     description: s("description"),
     amount: s("amount"),
     basis: s("basis") || "actual",
+    onCredit: fd.get("onCredit") === "on",
+    lines: parseLines(s("lines")),
     expectedUpdatedAt: s("expectedUpdatedAt") || undefined,
   };
+}
+
+function parseLines(raw: string): unknown {
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return "invalid";
+  }
 }

@@ -22,6 +22,7 @@ function dbMessage(msg: string): string {
   if (msg.includes("미래 날짜")) return "미래 날짜는 입력할 수 없습니다.";
   if (msg.includes("row-level security")) return "지출은 대표만 입력할 수 있습니다.";
   if (msg.includes("지점은 바꿀 수 없습니다")) return "지점은 바꿀 수 없습니다. 삭제 후 다시 입력하세요.";
+  if (msg.includes("거래처를 골라야")) return "외상(미수)은 거래처를 골라야 기록할 수 있어요.";
   return "저장 중 오류가 발생했습니다. 잠시 후 다시 시도하세요.";
 }
 
@@ -30,7 +31,16 @@ export async function saveExpenseAction(_prev: ActionResult, fd: FormData): Prom
   if (!auth.ok) return { ok: false, message: auth.message };
 
   const parsed = expenseInputSchema.safeParse(expenseFormToObject(fd));
-  if (!parsed.success) return { ok: false, fieldErrors: toFieldErrors(parsed.error) };
+  if (!parsed.success) {
+    // 품목 줄 오류는 '몇 번째 줄'인지 알려준다
+    const lineIssue = parsed.error.issues.find((i) => i.path[0] === "lines");
+    const fieldErrors = toFieldErrors(parsed.error);
+    if (lineIssue) {
+      const n = typeof lineIssue.path[1] === "number" ? `${lineIssue.path[1] + 1}번째 줄: ` : "";
+      fieldErrors.lines = `${n}${lineIssue.message}`;
+    }
+    return { ok: false, fieldErrors };
+  }
   const v = parsed.data;
   if (v.expenseDate > seoulDateKey()) return { ok: false, fieldErrors: { expenseDate: "미래 날짜는 입력할 수 없습니다." } };
 
@@ -47,33 +57,50 @@ export async function saveExpenseAction(_prev: ActionResult, fd: FormData): Prom
     const { data: found } = await supabase.from("vendors").select("id").eq("name", vendorName).maybeSingle();
     vendorId = found?.id ?? null;
   }
+  if (v.onCredit && !vendorId) {
+    return {
+      ok: false,
+      fieldErrors: { vendor: "외상(미수)은 거래처 목록에 있는 거래처만 가능해요. 거래처 버튼을 누르거나 거래처 관리에서 먼저 추가하세요." },
+    };
+  }
 
-  const row = {
-    store_id: v.storeId,
-    expense_date: v.expenseDate,
-    category_id: v.categoryId,
-    vendor: vendorName,
-    vendor_id: vendorId,
-    description: v.description,
-    amount: v.amount,
-    basis: v.basis,
-  };
-
-  if (v.id) {
-    let q = supabase.from("expenses").update(row).eq("id", v.id);
-    if (v.expectedUpdatedAt) q = q.eq("updated_at", v.expectedUpdatedAt);
-    const { data, error } = await q.select("id");
-    if (error) return { ok: false, message: dbMessage(error.message) };
-    if (!data?.length) return { ok: false, message: CONFLICT };
-  } else {
-    const { error } = await supabase.from("expenses").insert(row);
-    if (error) return { ok: false, message: dbMessage(error.message) };
+  // 지출 + 품목 줄을 한 번에 저장 (DB 함수가 합계 검증·동시 수정 감지)
+  const { error } = await supabase.rpc("save_expense_with_lines", {
+    p_expense: {
+      id: v.id ?? null,
+      store_id: v.storeId,
+      expense_date: v.expenseDate,
+      category_id: v.categoryId,
+      vendor: vendorName,
+      vendor_id: vendorId,
+      description: v.description,
+      amount: v.amount,
+      basis: v.basis,
+      on_credit: v.onCredit,
+    },
+    p_lines: v.lines.map((l) => ({
+      item_name: l.itemName,
+      quantity: l.quantity,
+      unit: l.unit,
+      unit_price: l.unitPrice,
+      amount: l.amount,
+    })),
+    p_expected_updated_at: v.id ? (v.expectedUpdatedAt ?? null) : null,
+  });
+  if (error) {
+    if (error.message.includes("먼저 수정")) return { ok: false, message: CONFLICT };
+    if (error.message.includes("품목 금액 합계")) return { ok: false, fieldErrors: { lines: "품목 금액 합계가 맞지 않습니다. 다시 확인하세요." } };
+    return { ok: false, message: dbMessage(error.message) };
   }
 
   refresh();
-  return { ok: true, message: `${v.id ? "수정" : "저장"}: ${v.vendor ?? ""} ${formatKRW(v.amount)}`.trim() };
+  revalidatePath("/payables");
+  revalidatePath("/purchases");
+  return {
+    ok: true,
+    message: `${v.id ? "수정" : "저장"}: ${vendorName ?? ""} ${formatKRW(v.amount)}${v.onCredit ? " (외상·미수)" : ""}`.trim(),
+  };
 }
-
 export async function deleteExpenseAction(id: string): Promise<ActionResult> {
   const auth = await authorizeAction(OWNER);
   if (!auth.ok) return { ok: false, message: auth.message };

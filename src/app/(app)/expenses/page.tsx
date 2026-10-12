@@ -4,7 +4,8 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth/dal";
 import { listAccessibleStores } from "@/lib/data/stores";
-import { getExpense, listCategories, listExpenses, recentVendors } from "@/lib/data/expenses";
+import { getExpense, listCategories, listExpenseLines, listExpenses, recentItemsByVendor, recentVendors } from "@/lib/data/expenses";
+import { summarizeItems } from "@/lib/payables";
 import { listVendors } from "@/lib/data/vendors";
 import { formatKRW, seoulDateKey } from "@/lib/format";
 import { isMonthKey, monthRange, prevMonth, SECTION_LABEL, type Section } from "@/lib/pnl";
@@ -46,16 +47,26 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
   const editId = first(sp.edit);
 
   const range = monthRange(month);
-  const [categories, expenses, vendors, editing, vendorRows] = await Promise.all([
+  const [categories, expenses, vendors, editing, vendorRows, itemSuggestions] = await Promise.all([
     listCategories(),
     listExpenses(range, [store.id]),
     recentVendors(),
     editId ? getExpense(editId) : Promise.resolve(null),
     listVendors(),
+    recentItemsByVendor(addDays(today, -365)),
   ]);
   const vendorList = vendorRows
     .filter((v) => v.isActive)
-    .map((v) => ({ id: v.id, name: v.name, items: v.items, defaultCategoryId: v.defaultCategoryId, storeIds: v.storeIds }));
+    .map((v) => ({
+      id: v.id,
+      name: v.name,
+      items: v.items,
+      defaultCategoryId: v.defaultCategoryId,
+      onCredit: v.onCredit,
+      storeIds: v.storeIds,
+    }));
+  const lines = await listExpenseLines([...expenses.map((e) => e.id), ...(editing ? [editing.id] : [])]);
+  const linesOf = (id: string) => lines.filter((l) => l.expenseId === id);
 
   const filtered = q
     ? expenses.filter((e) => `${e.vendor ?? ""} ${e.description ?? ""} ${e.categoryName}`.includes(q))
@@ -92,6 +103,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
           categories={categories}
           vendors={vendors}
           vendorList={vendorList}
+          itemSuggestions={itemSuggestions}
           defaultStoreId={store.id}
           defaultDate={defaultDate}
           today={today}
@@ -107,6 +119,14 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
                   description: editing.description,
                   amount: editing.amount,
                   basis: editing.basis,
+                  onCredit: editing.onCredit,
+                  lines: linesOf(editing.id).map((l) => ({
+                    itemName: l.itemName,
+                    quantity: l.quantity,
+                    unit: l.unit,
+                    unitPrice: l.unitPrice,
+                    amount: l.amount,
+                  })),
                   updatedAt: editing.updatedAt,
                 }
               : null
@@ -195,9 +215,14 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
                 <span className="font-medium">{e.vendor ?? e.categoryName}</span>{" "}
                 <span className="text-muted-foreground">
                   · {e.categoryName}
+                  {(() => {
+                    const s = summarizeItems(linesOf(e.id));
+                    return s ? ` · ${s}` : "";
+                  })()}
                   {e.description && ` · ${e.description}`}
                 </span>
               </span>
+              {e.onCredit && <Badge className="bg-amber-100 text-amber-900">외상</Badge>}
               {e.basis === "estimated" && <Badge variant="outline">추정</Badge>}
               {e.section === "excluded" && <Badge variant="secondary">제외</Badge>}
               <span className="w-28 text-right font-semibold tabular-nums">{formatKRW(e.amount)}</span>

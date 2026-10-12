@@ -13,6 +13,7 @@ import {
   HandCoins,
   Truck,
   PackageSearch,
+  Banknote,
   Store,
   UserCog,
   Users,
@@ -35,6 +36,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   expense: HandCoins,
   vendor: Truck,
   purchases: PackageSearch,
+  payables: Banknote,
   users: UserCog,
   audit: History,
 };

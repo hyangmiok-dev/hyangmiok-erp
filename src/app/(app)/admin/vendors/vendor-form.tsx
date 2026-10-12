@@ -26,6 +26,7 @@ export interface VendorFormValue {
   phone: string | null;
   memo: string | null;
   isActive: boolean;
+  onCredit: boolean;
   storeIds: string[];
 }
 
@@ -156,6 +157,10 @@ export function VendorDialog({
               className="w-full rounded-lg border border-input bg-background px-2.5 py-2 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </Field>
+          <label className="flex min-h-10 items-center gap-2 text-sm">
+            <input type="checkbox" name="onCredit" defaultChecked={vendor?.onCredit ?? true} className="size-5" />
+            외상 거래처 (물건 먼저 받고 나중에 결제 → 미수로 관리). 카드로 바로 결제하는 곳은 해제하세요.
+          </label>
           <label className="flex min-h-10 items-center gap-2 text-sm">
             <input type="checkbox" name="isActive" defaultChecked={vendor?.isActive ?? true} className="size-5" />
             거래 중 (해제하면 지출 입력 버튼 목록에서 빠져요. 기록은 남아요)

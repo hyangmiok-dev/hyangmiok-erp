@@ -82,6 +82,7 @@ export type NavIcon =
   | "expense"
   | "vendor"
   | "purchases"
+  | "payables"
   | "store"
   | "users"
   | "audit";
@@ -106,6 +107,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/production", label: "레시피·육수 생산", icon: "recipe", roles: MANAGERS, stage: 5, group: "업무" },
   { href: "/staff", label: "직원·근태", icon: "staff", roles: MANAGERS, stage: 4, group: "업무" },
   { href: "/expenses", label: "지출 입력", icon: "expense", roles: ["owner"], stage: 3, group: "업무" },
+  { href: "/payables", label: "거래처 미수", icon: "payables", roles: ["owner", "hq_manager"], stage: 3, group: "업무" },
   { href: "/pnl", label: "손익", icon: "pnl", roles: ["owner", "hq_manager"], stage: 3, group: "분석" },
   { href: "/purchases", label: "거래처별 매입", icon: "purchases", roles: ["owner", "hq_manager"], stage: 3, group: "분석" },
   { href: "/compare", label: "지점 비교", icon: "compare", roles: ["owner", "hq_manager"], stage: 6, group: "분석" },

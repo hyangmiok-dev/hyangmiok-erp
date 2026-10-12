@@ -47,13 +47,17 @@ const { data: vend, error: vendErr } = await admin.from("vendors").select("id");
 if (vendErr) bad(`거래처 마이그레이션(20261013000400) 미적용: ${vendErr.message}`);
 else ok(`거래처 마이그레이션 적용됨 (거래처 ${vend.length}곳)`);
 
+const { error: ledErr } = await admin.from("vendor_payments").select("id").limit(1);
+if (ledErr) bad(`거래처 원장 마이그레이션(20261013000500) 미적용: ${ledErr.message}`);
+else ok("거래처 원장 마이그레이션 적용됨 (품목·미수)");
+
 const { data: allProfiles } = await admin.from("profiles").select("role, is_active");
 const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 200 });
 ok(`Auth 사용자 ${authUsers?.users?.length ?? "?"}명 / 프로필 ${allProfiles?.length ?? "?"}개`);
 
 console.log("2) 비로그인(공개 키)으로는 데이터가 차단되는지");
 const anon = createClient(url, pub, { auth: { persistSession: false } });
-for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches", "expenses", "expense_categories", "inventory_counts", "vendors", "vendor_stores"]) {
+for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches", "expenses", "expense_categories", "inventory_counts", "vendors", "vendor_stores", "expense_lines", "vendor_payments"]) {
   const { data, error } = await anon.from(table).select("*").limit(1);
   if (error || (data ?? []).length === 0) ok(`${table}: 차단됨${error ? ` (${error.code ?? error.message})` : " (0행)"}`);
   else bad(`${table}: 비로그인 상태에서 데이터가 보임!`);
