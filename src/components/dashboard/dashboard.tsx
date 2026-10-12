@@ -29,6 +29,7 @@ import {
   seoulDateKey,
 } from "@/lib/format";
 import { EmptyState } from "@/components/states";
+import { StockReserveControl } from "@/components/food-cost/stock-reserve-control";
 import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -86,9 +87,11 @@ export async function Dashboard({ searchParams, user }: { searchParams: SP; user
       listInventory([addDays(mtd.start, -1), monthRange(month).end], pnlIds),
     ]);
     for (const id of pnlIds) {
-      pnlByStore.set(id, computeStorePnl({ storeId: id, month, today, sales, expenses: exps, inventory: inv }));
+      const stockReservePct = stores.find((s) => s.id === id)!.stockReservePct;
+      pnlByStore.set(id, computeStorePnl({ storeId: id, month, today, sales, expenses: exps, inventory: inv, stockReservePct }));
     }
   }
+  const isOwner = user.role === "owner";
 
   const day = (d: string): DateRange => ({ start: d, end: d });
   const cards = stores.map((s) => {
@@ -204,7 +207,7 @@ export async function Dashboard({ searchParams, user }: { searchParams: SP; user
                   </p>
                   <dl className="grid grid-cols-3 gap-2 text-sm">
                     <div>
-                      <dt className="text-xs text-muted-foreground">원가율</dt>
+                      <dt className="text-xs text-muted-foreground">원가율 (실시간)</dt>
                       <dd className="font-semibold">{formatPercent(c.pnl.cogsRate)}</dd>
                     </div>
                     <div>
@@ -223,6 +226,18 @@ export async function Dashboard({ searchParams, user }: { searchParams: SP; user
                       </dd>
                     </div>
                   </dl>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span>
+                      원가율 ={" "}
+                      {c.pnl.cogsBasis === "actual"
+                        ? "재고 반영 매출원가"
+                        : `식재료 매입 ${formatKRW(c.pnl.purchases)} − 냉장고 재고 ${c.pnl.stockReservePct}%`}{" "}
+                      ÷ 실매출
+                    </span>
+                    {isOwner && c.pnl.cogsBasis === "estimated" && (
+                      <StockReserveControl storeId={c.store.id} storeName={c.store.name} value={c.pnl.stockReservePct} />
+                    )}
+                  </div>
                 </div>
               )}
 

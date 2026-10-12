@@ -4,14 +4,24 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth/dal";
 import { listAccessibleStores } from "@/lib/data/stores";
-import { getExpense, listCategories, listExpenseLines, listExpenses, recentItemsByVendor, recentVendors } from "@/lib/data/expenses";
+import {
+  getExpense,
+  listCategories,
+  listExpenseLines,
+  listExpenses,
+  listInventory,
+  recentItemsByVendor,
+  recentVendors,
+} from "@/lib/data/expenses";
+import { listSales } from "@/lib/data/sales";
 import { summarizeItems } from "@/lib/payables";
 import { listVendors } from "@/lib/data/vendors";
 import { formatKRW, seoulDateKey } from "@/lib/format";
-import { isMonthKey, monthRange, prevMonth, SECTION_LABEL, type Section } from "@/lib/pnl";
+import { computeStorePnl, isMonthKey, monthRange, prevMonth, SECTION_LABEL, type Section } from "@/lib/pnl";
 import { addDays, shortDateKo } from "@/lib/period";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, LoadingState } from "@/components/states";
+import { FoodCostLine } from "@/components/food-cost/food-cost-panel";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -47,14 +57,26 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
   const editId = first(sp.edit);
 
   const range = monthRange(month);
-  const [categories, expenses, vendors, editing, vendorRows, itemSuggestions] = await Promise.all([
+  const [categories, expenses, vendors, editing, vendorRows, itemSuggestions, monthSales, inventory] = await Promise.all([
     listCategories(),
     listExpenses(range, [store.id]),
     recentVendors(),
     editId ? getExpense(editId) : Promise.resolve(null),
     listVendors(),
     recentItemsByVendor(addDays(today, -365)),
+    listSales(range, [store.id]),
+    listInventory([addDays(range.start, -1), range.end], [store.id]),
   ]);
+  // 거래명세표를 넣을 때마다 바로 바뀌는 원가율 (냉장고 재고 비율 반영)
+  const foodCost = computeStorePnl({
+    storeId: store.id,
+    month,
+    today,
+    sales: monthSales,
+    expenses,
+    inventory,
+    stockReservePct: store.stockReservePct,
+  });
   const vendorList = vendorRows
     .filter((v) => v.isActive)
     .map((v) => ({
@@ -188,6 +210,14 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
             <p className="text-lg font-bold tabular-nums">{formatKRW(sectionTotal(s))}</p>
           </div>
         ))}
+      </div>
+      <div className="mb-4">
+        <FoodCostLine
+          pnl={foodCost}
+          storeName={store.name}
+          title={month === thisMonth ? "이번 달 원가율 (실시간)" : `${Number(month.slice(5))}월 원가율`}
+          canEdit
+        />
       </div>
       {month <= thisMonth && (
         <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">

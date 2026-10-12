@@ -209,7 +209,8 @@ async function Purchases({ searchParams }: { searchParams: PageProps<"/purchases
         </div>
       )}
       <p className="mt-3 text-xs text-muted-foreground">
-        원가율(매입 기준) = 그 달 식재료비 매입 ÷ 실매출. 재고 변동을 반영한 원가율은 [손익] 화면에서 월말 재고를 넣으면 볼 수 있어요. 금액은 부가세 포함.
+        원가율(매입 기준) = 그 달 식재료비 매입 ÷ 실매출. 냉장고 재고({store.stockReservePct}%)를 뺀 실시간 원가율은 [홈]·[거래처 미수]·[지출 입력] 화면에,
+        월말 재고를 직접 센 원가율은 [손익] 화면에 나와요. 금액은 부가세 포함.
       </p>
     </div>
   );

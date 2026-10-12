@@ -13,6 +13,8 @@ export interface StoreRow {
   notes: string | null;
   isActive: boolean;
   sortOrder: number;
+  /** 냉장고 재고 비율(%) — 월말 재고가 없을 때 원가 추정에 쓴다 (대표 설정 5~10) */
+  stockReservePct: number;
   updatedAt: string;
 }
 
@@ -21,7 +23,7 @@ export async function listAccessibleStores(): Promise<StoreRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("stores")
-    .select("id, code, name, address, seat_count, area_pyeong, business_hours, notes, is_active, sort_order, updated_at")
+    .select("id, code, name, address, seat_count, area_pyeong, business_hours, notes, is_active, sort_order, stock_reserve_pct, updated_at")
     .order("sort_order")
     .order("code");
   if (error) throw new Error(`지점 조회 실패: ${error.message}`);
@@ -38,6 +40,7 @@ export async function listAccessibleStores(): Promise<StoreRow[]> {
       notes: s.notes,
       isActive: s.is_active,
       sortOrder: s.sort_order,
+      stockReservePct: Number(s.stock_reserve_pct),
       updatedAt: s.updated_at,
     };
   });

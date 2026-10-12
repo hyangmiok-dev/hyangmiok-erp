@@ -51,6 +51,10 @@ const { error: ledErr } = await admin.from("vendor_payments").select("id").limit
 if (ledErr) bad(`거래처 원장 마이그레이션(20261013000500) 미적용: ${ledErr.message}`);
 else ok("거래처 원장 마이그레이션 적용됨 (품목·미수)");
 
+const { data: reserve, error: resErr } = await admin.from("stores").select("name, stock_reserve_pct").order("code");
+if (resErr) bad(`냉장고 재고 비율 마이그레이션(20261013000600) 미적용: ${resErr.message}`);
+else ok(`냉장고 재고 비율 적용됨 (${reserve.map((s) => `${s.name.replace("향미옥 ", "")} ${Number(s.stock_reserve_pct)}%`).join(", ")})`);
+
 const { data: allProfiles } = await admin.from("profiles").select("role, is_active");
 const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 200 });
 ok(`Auth 사용자 ${authUsers?.users?.length ?? "?"}명 / 프로필 ${allProfiles?.length ?? "?"}개`);

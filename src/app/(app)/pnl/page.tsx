@@ -21,6 +21,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, LoadingState } from "@/components/states";
 import { StatTile } from "@/components/dashboard/stat-tile";
+import { StockReserveControl } from "@/components/food-cost/stock-reserve-control";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,8 @@ type Col = {
   begin: number | null;
   purchases: number;
   end: number | null;
+  reservePct: number;
+  reserveAmount: number;
   cogs: number;
   cogsBasis: "actual" | "estimated";
   labor: number;
@@ -68,6 +71,8 @@ function storeCol(p: StorePnl, title: string): Col {
     begin: p.beginInventory,
     purchases: p.purchases,
     end: p.endInventory,
+    reservePct: p.stockReservePct,
+    reserveAmount: p.stockReserveAmount,
     cogs: p.cogs,
     cogsBasis: p.cogsBasis,
     labor: p.labor,
@@ -139,7 +144,7 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
   ]);
 
   const perStore = shown.map((s) =>
-    computeStorePnl({ storeId: s.id, month: month!, today, sales, expenses, inventory }),
+    computeStorePnl({ storeId: s.id, month: month!, today, sales, expenses, inventory, stockReservePct: s.stockReservePct }),
   );
   const cols: Col[] = perStore.map((p, i) => storeCol(p, shown[i].name.replace("향미옥 ", "")));
   const head = cols[cols.length - 1];
@@ -242,7 +247,7 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
           label="식재료 원가율"
           value={formatPercent(head.cogsRate)}
           muted={head.cogsRate.status !== "ok"}
-          sub={head.cogsBasis === "actual" ? "재고 반영 매출원가 기준" : "추정 (매입액 기준)"}
+          sub={head.cogsBasis === "actual" ? "재고 반영 매출원가 기준" : `추정 (매입 − 냉장고 재고 ${head.reservePct}%)`}
         />
         <StatTile label="인건비율" value={formatPercent(head.laborRate)} muted={head.laborRate.status !== "ok"} sub={`인건비 ${formatKRW(head.labor)}`} />
         <StatTile
@@ -273,11 +278,23 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
               label="(−) 매출원가"
               strong
               value={(c) => formatKRW(c.cogs)}
-              note={(c) => [c.cogsBasis === "estimated" ? "매입액 기준(추정)" : "재고 반영", single ? pctOf(c.cogs, c) : ""].filter(Boolean).join(" · ")}
+              note={(c) =>
+                [c.cogsBasis === "estimated" ? `매입 − 냉장고 재고 ${c.reservePct}% (추정)` : "재고 반영", single ? pctOf(c.cogs, c) : ""]
+                  .filter(Boolean)
+                  .join(" · ")
+              }
             />
             <PnlRow cols={cols} label="기초재고 (전월 말)" indent value={(c) => (c.begin === null ? "미입력" : formatKRW(c.begin))} />
             <PnlRow cols={cols} label="+ 식재료 매입" indent value={(c) => formatKRW(c.purchases)} />
             <PnlRow cols={cols} label="− 기말재고 (이달 말)" indent value={(c) => (c.end === null ? "미입력" : formatKRW(c.end))} />
+            {head.cogsBasis === "estimated" && (
+              <PnlRow
+                cols={cols}
+                label={`− 냉장고 재고 (매입의 ${head.reservePct}%, 추정)`}
+                indent
+                value={(c) => (c.reserveAmount ? `−${formatKRW(c.reserveAmount)}` : "0원")}
+              />
+            )}
             <PnlRow cols={cols} label="(−) 인건비" strong value={(c) => formatKRW(c.labor)} note={(c) => (single ? pctOf(c.labor, c) : "")} />
             {linesOf("labor").map((l) => (
               <PnlRow cols={cols} key={l.categoryId} label={l.name} indent value={(c) => <>{formatKRW(amountIn(c, l.categoryId))}{estIn(c, l.categoryId) && " *"}</>} />
@@ -314,13 +331,17 @@ async function Pnl({ searchParams }: { searchParams: PageProps<"/pnl">["searchPa
           <h2 className="font-semibold">월말 재고 금액</h2>
           <p className="mb-4 text-sm text-muted-foreground">
             월말에 남은 재료를 세어 금액으로 넣으면, 원가율이 &apos;추정&apos;에서 실제 매출원가 기준으로 바뀝니다. (전월 말 + 이달 말 둘 다 필요)
+            재고를 세지 않은 달은 매입액에서 냉장고 재고 비율만큼 빼고 추정해요.
           </p>
           <div className="space-y-4">
             {shown.map((s) => {
               const p = perStore.find((x) => x.storeId === s.id)!;
               return (
                 <div key={s.id} className="space-y-2">
-                  <p className="text-sm font-medium">{s.name}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{s.name}</p>
+                    <StockReserveControl storeId={s.id} storeName={s.name} value={s.stockReservePct} />
+                  </div>
                   <InventoryForm storeId={s.id} countDate={beginDate} label={`전월 말 (${beginDate.slice(5).replace("-", "/")})`} current={p.beginInventory} />
                   <InventoryForm
                     storeId={s.id}

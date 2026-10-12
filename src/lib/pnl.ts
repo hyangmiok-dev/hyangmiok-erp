@@ -1,13 +1,33 @@
 /**
  * 월 손익 계산 (순수 함수).
  * - 매출원가 = 기초재고 + 당월 식재료 매입 − 기말재고  (재고 실사가 양쪽 다 있을 때만 '실제')
- *   재고가 없으면 '매입액 = 원가'로 보고 추정 표시
+ *   재고가 없으면 '매입 − 냉장고 재고(지점별 대표 설정 5~10%)'로 보고 추정 표시
  * - 영업이익 = 실매출 − 매출원가 − 인건비 − 기타 영업비용   (section 'excluded' 는 제외)
  * - 미입력은 0 으로 확정하지 않는다: 매출 미입력 일수, 지난달엔 있었는데 이번 달 없는 항목을 경고
  */
 import { addDays, endOfMonth, type DateKey, type DateRange } from "@/lib/period";
 import { percent, type Ratio } from "@/lib/format";
 import { summarize, type SaleRow, type Summary } from "@/lib/sales/summary";
+
+/** 냉장고 재고 비율 선택지 (%) — 대표만 지점별로 정한다 (stores.stock_reserve_pct, DB 에서 5~10 강제) */
+export const STOCK_RESERVE_OPTIONS = [5, 6, 7, 8, 9, 10] as const;
+
+/**
+ * 매출원가
+ *  - 재고 실사(전월 말·이달 말)가 둘 다 있으면 실제: 기초 + 매입 − 기말
+ *  - 없으면 추정: 매입 − 냉장고 재고(매입 × 비율, 원 단위 반올림)
+ */
+export function costOfGoods(opts: { purchases: number; begin: number | null; end: number | null; reservePct: number }): {
+  cogs: number;
+  basis: "actual" | "estimated";
+  reserveAmount: number;
+} {
+  if (opts.begin !== null && opts.end !== null) {
+    return { cogs: opts.begin + opts.purchases - opts.end, basis: "actual", reserveAmount: 0 };
+  }
+  const reserveAmount = Math.round((opts.purchases * opts.reservePct) / 100);
+  return { cogs: opts.purchases - reserveAmount, basis: "estimated", reserveAmount };
+}
 
 export type Section = "cogs" | "labor" | "opex" | "excluded";
 
@@ -26,6 +46,8 @@ export interface ExpenseItem {
   section: Section;
   amount: number;
   basis: "actual" | "estimated";
+  /** 외상 매입 (거래처 미수로 잡힌 것) */
+  onCredit?: boolean;
 }
 
 export interface InventoryCount {
@@ -46,8 +68,14 @@ export interface StorePnl {
   storeId: string;
   sales: Summary;
   purchases: number;
+  /** 식재료 매입 중 외상 */
+  creditPurchases: number;
   beginInventory: number | null;
   endInventory: number | null;
+  /** 냉장고 재고 비율(%) — 대표 설정 */
+  stockReservePct: number;
+  /** 추정일 때 매입에서 뺀 냉장고 재고 금액 (실제 재고를 쓰면 0) */
+  stockReserveAmount: number;
   /** 매출원가 */
   cogs: number;
   cogsBasis: "actual" | "estimated";
@@ -88,8 +116,10 @@ export function computeStorePnl(opts: {
   sales: SaleRow[];
   expenses: ExpenseItem[];
   inventory: InventoryCount[];
+  /** 지점의 냉장고 재고 비율(%) */
+  stockReservePct: number;
 }): StorePnl {
-  const { storeId, month, today } = opts;
+  const { storeId, month, today, stockReservePct } = opts;
   const full = monthRange(month);
   // 진행 중인 달은 오늘까지만 매출 완결성을 본다
   const salesRange: DateRange = { start: full.start, end: full.end > today ? today : full.end };
@@ -116,11 +146,13 @@ export function computeStorePnl(opts: {
   const total = (s: Section) => lines.filter((l) => l.section === s).reduce((n, l) => n + l.amount, 0);
 
   const purchases = total("cogs");
+  const creditPurchases = thisMonth.filter((e) => e.section === "cogs" && e.onCredit).reduce((n, e) => n + e.amount, 0);
   const inv = opts.inventory.filter((c) => c.storeId === storeId);
   const beginInventory = inv.find((c) => c.date === addDays(full.start, -1))?.amount ?? null;
   const endInventory = inv.find((c) => c.date === full.end)?.amount ?? null;
-  const cogsActual = beginInventory !== null && endInventory !== null;
-  const cogs = cogsActual ? beginInventory + purchases - endInventory : purchases;
+  const cost = costOfGoods({ purchases, begin: beginInventory, end: endInventory, reservePct: stockReservePct });
+  const cogsActual = cost.basis === "actual";
+  const cogs = cost.cogs;
 
   const labor = total("labor");
   const opex = total("opex");
@@ -137,7 +169,13 @@ export function computeStorePnl(opts: {
 
   const reasons: string[] = [];
   if (!sales.complete) reasons.push(sales.entered === 0 ? "매출 미입력" : `매출 ${sales.missing.length}일 미입력`);
-  if (!cogsActual) reasons.push("월말 재고 없음 → 매입액을 원가로 계산");
+  if (!cogsActual) {
+    reasons.push(
+      stockReservePct > 0
+        ? `월말 재고 없음 → 매입액에서 냉장고 재고 ${stockReservePct}%를 빼고 원가로 계산`
+        : "월말 재고 없음 → 매입액을 원가로 계산",
+    );
+  }
   if (hasEstimatedExpense) reasons.push("추정 금액 포함");
   if (missingCategories.length) reasons.push(`지난달 있던 항목 미입력: ${missingCategories.join(", ")}`);
   if (full.end > today) reasons.push("진행 중인 달");
@@ -147,10 +185,13 @@ export function computeStorePnl(opts: {
     storeId,
     sales,
     purchases,
+    creditPurchases,
     beginInventory,
     endInventory,
+    stockReservePct,
+    stockReserveAmount: cost.reserveAmount,
     cogs,
-    cogsBasis: cogsActual ? "actual" : "estimated",
+    cogsBasis: cost.basis,
     labor,
     opex,
     excluded,
@@ -167,7 +208,12 @@ export function computeStorePnl(opts: {
 }
 
 /** 여러 지점 합계 (한 곳이라도 추정이면 추정) */
-export function combinePnl(items: StorePnl[]): Omit<StorePnl, "storeId" | "sales" | "beginInventory" | "endInventory"> & {
+export function combinePnl(
+  items: StorePnl[],
+): Omit<
+  StorePnl,
+  "storeId" | "sales" | "beginInventory" | "endInventory" | "creditPurchases" | "stockReservePct" | "stockReserveAmount"
+> & {
   netSales: number | null;
   salesComplete: boolean;
 } {

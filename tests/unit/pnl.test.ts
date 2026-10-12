@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { combinePnl, computeStorePnl, monthRange, prevMonth, type ExpenseItem } from "@/lib/pnl";
+import {
+  combinePnl,
+  computeStorePnl as computeStorePnlWithReserve,
+  costOfGoods,
+  monthRange,
+  prevMonth,
+  type ExpenseItem,
+} from "@/lib/pnl";
 import type { SaleRow } from "@/lib/sales/summary";
 import { guessCategoryCode } from "@/lib/expense-hints";
 import { eachDay } from "@/lib/period";
@@ -30,6 +37,10 @@ const exp = (p: Partial<ExpenseItem> & { amount: number; section: ExpenseItem["s
 });
 
 const TODAY = "2026-10-13";
+
+/** 기존 검사: 냉장고 재고 비율 0% (매입액 = 원가) */
+const computeStorePnl = (o: Omit<Parameters<typeof computeStorePnlWithReserve>[0], "stockReservePct">) =>
+  computeStorePnlWithReserve({ ...o, stockReservePct: 0 });
 
 describe("월 손익", () => {
   const sales = fullMonthSales(A, "2026-09", 1_000_000); // 30일 × 100만 = 3,000만
@@ -139,6 +150,83 @@ describe("월 손익", () => {
   it("월 계산", () => {
     expect(prevMonth("2026-01")).toBe("2025-12");
     expect(monthRange("2026-02")).toEqual({ start: "2026-02-01", end: "2026-02-28" });
+  });
+});
+
+describe("실시간 원가율 — 냉장고 재고 비율 (대표 설정)", () => {
+  const sales = fullMonthSales(A, "2026-09", 1_000_000); // 3,000만
+  const food = (amount: number, onCredit: boolean, date = "2026-09-10") =>
+    exp({ section: "cogs", amount, categoryId: "food", categoryName: "식재료비", onCredit, date });
+
+  it("월말 재고가 없으면 매입에서 냉장고 재고 %를 빼고 원가로 본다", () => {
+    const p = computeStorePnlWithReserve({
+      storeId: A,
+      month: "2026-09",
+      today: TODAY,
+      sales,
+      expenses: [food(7_000_000, true), food(2_000_000, false)],
+      inventory: [],
+      stockReservePct: 7,
+    });
+    expect(p.purchases).toBe(9_000_000);
+    expect(p.creditPurchases).toBe(7_000_000); // 외상분만
+    expect(p.stockReserveAmount).toBe(630_000); // 900만 × 7%
+    expect(p.cogs).toBe(8_370_000);
+    expect(p.cogsBasis).toBe("estimated");
+    expect(p.cogsRate.status === "ok" && p.cogsRate.value).toBeCloseTo(27.9, 5);
+    expect(p.operatingProfit).toBe(30_000_000 - 8_370_000);
+    expect(p.reasons[0]).toBe("월말 재고 없음 → 매입액에서 냉장고 재고 7%를 빼고 원가로 계산");
+  });
+
+  it("외상 매입이 늘면 원가율이 바로 오른다", () => {
+    const base = { storeId: A, month: "2026-09", today: TODAY, sales, inventory: [], stockReservePct: 5 };
+    const before = computeStorePnlWithReserve({ ...base, expenses: [food(6_000_000, true)] });
+    const after = computeStorePnlWithReserve({ ...base, expenses: [food(6_000_000, true), food(1_000_000, true, "2026-09-20")] });
+    expect(before.cogsRate.status === "ok" && before.cogsRate.value).toBeCloseTo(19, 5); // 600만 × 95% ÷ 3,000만
+    expect(after.cogsRate.status === "ok" && after.cogsRate.value).toBeCloseTo(22.1666, 3); // 700만 × 95% ÷ 3,000만
+  });
+
+  it("월말 재고를 직접 셌으면 비율은 쓰지 않고 실제 매출원가", () => {
+    const p = computeStorePnlWithReserve({
+      storeId: A,
+      month: "2026-09",
+      today: TODAY,
+      sales,
+      expenses: [food(9_000_000, true)],
+      inventory: [
+        { storeId: A, date: "2026-08-31", amount: 1_000_000 },
+        { storeId: A, date: "2026-09-30", amount: 1_500_000 },
+      ],
+      stockReservePct: 10,
+    });
+    expect(p.cogs).toBe(8_500_000);
+    expect(p.cogsBasis).toBe("actual");
+    expect(p.stockReserveAmount).toBe(0);
+  });
+
+  it("매출이 없으면 원가율은 '미입력' (0%로 보이지 않음)", () => {
+    const p = computeStorePnlWithReserve({
+      storeId: A,
+      month: "2026-10",
+      today: TODAY,
+      sales: [],
+      expenses: [food(500_000, true, "2026-10-02")],
+      inventory: [],
+      stockReservePct: 5,
+    });
+    expect(p.cogs).toBe(475_000);
+    expect(p.cogsRate.status).toBe("missing");
+  });
+
+  it("원 단위 반올림", () => {
+    expect(costOfGoods({ purchases: 1_234_567, begin: null, end: null, reservePct: 7 })).toEqual({
+      cogs: 1_148_147, // 1,234,567 − 86,420 (86,419.69 반올림)
+      basis: "estimated",
+      reserveAmount: 86_420,
+    });
+    expect(costOfGoods({ purchases: 0, begin: null, end: null, reservePct: 10 }).cogs).toBe(0);
+    // 한쪽 재고만 있으면 여전히 추정
+    expect(costOfGoods({ purchases: 100_000, begin: 50_000, end: null, reservePct: 5 }).basis).toBe("estimated");
   });
 });
 

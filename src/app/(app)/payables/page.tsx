@@ -6,11 +6,15 @@ import { canViewStorePnl } from "@/lib/auth/roles";
 import { listAccessibleStores } from "@/lib/data/stores";
 import { listVendors } from "@/lib/data/vendors";
 import { listLedgerPayments, listLedgerPurchases } from "@/lib/data/payables";
+import { listSales } from "@/lib/data/sales";
+import { listExpenses, listInventory } from "@/lib/data/expenses";
 import { summarizePayables } from "@/lib/payables";
+import { computeStorePnl, monthRange } from "@/lib/pnl";
 import { formatKRW, seoulDateKey } from "@/lib/format";
-import { shortDateKo } from "@/lib/period";
+import { addDays, shortDateKo } from "@/lib/period";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, LoadingState } from "@/components/states";
+import { FoodCostPanel } from "@/components/food-cost/food-cost-panel";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PaymentDialog } from "./payment-dialog";
@@ -37,11 +41,25 @@ async function Payables({ searchParams }: { searchParams: PageProps<"/payables">
   if (!stores.length) return <EmptyState title="볼 수 있는 지점이 없습니다" />;
   const store = stores.find((s) => s.id === first(sp.store)) ?? stores[0];
 
-  const [vendors, { purchases }, payments] = await Promise.all([
+  const range = monthRange(month);
+  const [vendors, { purchases }, payments, monthSales, monthExpenses, inventory] = await Promise.all([
     listVendors(),
     listLedgerPurchases(store.id),
     listLedgerPayments(store.id),
+    listSales({ start: range.start, end: today }, [store.id]),
+    listExpenses({ start: range.start, end: today }, [store.id]),
+    listInventory([addDays(range.start, -1), range.end], [store.id]),
   ]);
+  // 실시간 원가율: 이번 달 식재료 매입(외상 포함) − 냉장고 재고(대표 설정 %) ÷ 이번 달 실매출
+  const foodCost = computeStorePnl({
+    storeId: store.id,
+    month,
+    today,
+    sales: monthSales,
+    expenses: monthExpenses,
+    inventory,
+    stockReservePct: store.stockReservePct,
+  });
   const vendorById = new Map(vendors.map((v) => [v.id, v]));
   const storeVendorIds = vendors.filter((v) => v.isActive && v.storeIds.includes(store.id)).map((v) => v.id);
 
@@ -102,6 +120,10 @@ async function Payables({ searchParams }: { searchParams: PageProps<"/payables">
           ))}
         </div>
       )}
+
+      <div className="mb-3">
+        <FoodCostPanel pnl={foodCost} storeName={store.name} today={today} title="이번 달 원가율 (실시간)" canEdit={isOwner} />
+      </div>
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">

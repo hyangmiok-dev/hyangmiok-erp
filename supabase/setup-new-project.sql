@@ -3,7 +3,7 @@
 -- 만든 방법: node scripts/build-setup-sql.mjs
 -- 사용법: 새 프로젝트의 SQL Editor 에 전체를 붙여넣고 Run 한 번.
 --         이미 설정된 프로젝트에 다시 실행하면 'already exists' 오류가 나며 아무것도 바뀌지 않습니다.
--- 포함: 20261012000100_stage1_core_auth.sql, 20261013000100_stage1b_name_login_first_password.sql, 20261013000200_stage2_daily_sales.sql, 20261013000300_stage3_expenses.sql, 20261013000400_vendors.sql, 20261013000500_vendor_ledger.sql
+-- 포함: 20261012000100_stage1_core_auth.sql, 20261013000100_stage1b_name_login_first_password.sql, 20261013000200_stage2_daily_sales.sql, 20261013000300_stage3_expenses.sql, 20261013000400_vendors.sql, 20261013000500_vendor_ledger.sql, 20261013000600_stock_reserve.sql
 -- =====================================================================
 
 -- >>>>> 20261012000100_stage1_core_auth.sql
@@ -1290,3 +1290,26 @@ create policy vendor_payments_update on public.vendor_payments
   for update to authenticated using (app.is_owner()) with check (app.is_owner());
 create policy vendor_payments_delete on public.vendor_payments
   for delete to authenticated using (app.is_owner());
+
+
+-- >>>>> 20261013000600_stock_reserve.sql
+-- =====================================================================
+-- 실시간 원가율: 지점별 '냉장고 재고 비율' (대표만 설정)
+-- ---------------------------------------------------------------------
+-- 대표 요청 (2026-10-13)
+--  * 거래처 미수(외상 매입)가 쌓이는 동안 매출 대비 원재료비가 몇 %인지 실시간으로 보고 싶다
+--  * 냉장고에 보관 중인 재고가 있으니 매입액에서 5~10%를 빼고 계산. 비율은 대표만 정한다
+-- 계산 (앱 src/lib/pnl.ts costOfGoods):
+--    사용 원재료(추정) = 이번 달 식재료 매입 − 매입 × 비율
+--    원가율 = 사용 원재료 ÷ 이번 달 실매출
+--    월말 재고 실사(전월 말 + 이달 말)가 둘 다 있으면 비율 대신 실제 매출원가를 쓴다
+-- 권한: stores 수정 정책(stores_update)이 이미 '대표만' → 정책 추가 없음.
+--       바꾼 기록은 기존 stores_audit 트리거로 변경 이력에 남는다.
+-- =====================================================================
+
+alter table public.stores
+  add column stock_reserve_pct numeric(3, 1) not null default 5
+    constraint stores_stock_reserve_pct_range check (stock_reserve_pct between 5 and 10);
+
+comment on column public.stores.stock_reserve_pct is
+  '냉장고 재고 비율(%). 월말 재고 실사가 없을 때 이번 달 식재료 매입 중 이만큼은 아직 냉장고에 남아 있다고 보고 원가에서 뺀다. 5~10, 대표만 수정';
