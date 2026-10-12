@@ -25,11 +25,11 @@ Node.js(24 LTS)와 Git이 이 PC에 설치되어 있습니다. 다른 PC에서�
    - Region: **Northeast Asia (Seoul)**
    - Database password: 길고 복잡하게 만들고 안전한 곳에 보관
 2. 프로젝트가 만들어지면 왼쪽 메뉴 **SQL Editor** → **New query** 를 엽니다.
-3. 이 폴더의 `supabase/migrations/20261012000100_stage1_core_auth.sql` 파일을 메모장으로 열어 **전체 복사 → 붙여넣기 → Run**.
+3. 이 폴더의 `supabase/migrations` 안의 **.sql 파일을 이름 순서대로 하나씩** 메모장으로 열어 **전체 복사 → 붙여넣기 → Run** (파일마다 한 번씩).
    - "Success" 가 나오면 됩니다. (한 번만 실행하세요)
 4. 보안 설정 (꼭 하세요)
    - **Authentication → Sign In / Providers → Email**: `Allow new users to sign up` **끄기** (아무나 가입하지 못하게)
-   - 같은 화면의 비밀번호 최소 길이: **10**
+   - 같은 화면의 비밀번호 최소 길이(Minimum password length): **6** (직원 비밀번호가 숫자 6자리이기 때문. 관리자 비밀번호 10자 규칙은 프로그램이 따로 검사합니다)
 5. 대표 계정 만들기
    - **Authentication → Users → Add user → Create new user**: 대표 이메일·비밀번호 입력, `Auto Confirm User` 체크
    - **SQL Editor** 에서 `supabase/bootstrap-owner.sql` 내용을 붙여넣고, `owner@example.com` 을 대표 이메일로 바꾼 뒤 **Run**

@@ -22,6 +22,8 @@ export interface SessionUser {
   email: string | null;
   /** 소속 지점 id. 대표는 전체 지점 접근이므로 이 목록과 무관. */
   storeIds: string[];
+  /** true 면 다른 화면을 쓰기 전에 비밀번호를 바꿔야 한다 (계정 생성·초기화 직후). */
+  mustChangePassword: boolean;
 }
 
 export function isRole(v: unknown): v is Role {

@@ -5,9 +5,12 @@ import { authorizeAction } from "@/lib/auth/dal";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLoginIdDomain } from "@/lib/env";
+import { loginIdToEmail } from "@/lib/auth/login-id";
+import { isRole } from "@/lib/auth/roles";
 import {
   createUserSchema,
   formToObject,
+  initialPasswordSchemaFor,
   resetPasswordSchema,
   toFieldErrors,
   updateUserSchema,
@@ -33,8 +36,20 @@ export async function createUserAction(_prev: ActionResult, fd: FormData): Promi
   if (!parsed.success) return { ok: false, fieldErrors: toFieldErrors(parsed.error) };
   const v = parsed.data;
 
-  const loginId = v.loginType === "id" ? v.loginId! : null;
-  const email = v.loginType === "id" ? `${loginId}@${getLoginIdDomain()}` : v.email!;
+  const loginId = v.loginType === "name" ? v.loginId! : null;
+  const email = loginId ? loginIdToEmail(loginId, getLoginIdDomain()) : v.email!;
+
+  // 같은 아이디가 이미 있으면 Auth 계정을 만들기 전에 안내 (동명이인)
+  if (loginId) {
+    const { data: dup } = await (await createClient())
+      .from("profiles")
+      .select("id")
+      .eq("login_id", loginId)
+      .maybeSingle();
+    if (dup) {
+      return { ok: false, fieldErrors: { loginId: `'${loginId}' 는 이미 있는 아이디입니다. 뒤에 숫자를 붙여 주세요. (예: ${loginId}2)` } };
+    }
+  }
 
   // 1) Auth 계정 생성 (시크릿 키 필요). 트리거가 staff·비활성 프로필을 만든다.
   let admin;
@@ -62,7 +77,7 @@ export async function createUserAction(_prev: ActionResult, fd: FormData): Promi
   const supabase = await createClient();
   const { error: profErr } = await supabase
     .from("profiles")
-    .update({ full_name: v.fullName, role: v.role, is_active: true, login_id: loginId })
+    .update({ full_name: v.fullName, role: v.role, is_active: true, login_id: loginId, must_change_password: true })
     .eq("id", newId);
   const { error: memErr } = profErr
     ? { error: null }
@@ -132,14 +147,35 @@ export async function resetPasswordAction(_prev: ActionResult, fd: FormData): Pr
 
   const parsed = resetPasswordSchema.safeParse({ userId: fd.get("userId"), password: fd.get("password") });
   if (!parsed.success) return { ok: false, fieldErrors: toFieldErrors(parsed.error) };
+  const { userId, password } = parsed.data;
+
+  if (userId === auth.user.id) {
+    return { ok: false, message: "본인 비밀번호는 [내 계정]에서 바꿔 주세요." };
+  }
+
+  // 대상 역할에 맞는 첫 비밀번호 규칙 적용 (직원=생년월일 6자리, 관리자=10자 이상)
+  const supabase = await createClient();
+  const { data: target } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
+  if (!target || !isRole(target.role)) return { ok: false, message: "계정을 찾을 수 없습니다." };
+  const pw = initialPasswordSchemaFor(target.role).safeParse(password);
+  if (!pw.success) return { ok: false, fieldErrors: { password: pw.error.issues[0].message } };
 
   try {
-    const { error } = await createAdminClient().auth.admin.updateUserById(parsed.data.userId, {
-      password: parsed.data.password,
-    });
+    const { error } = await createAdminClient().auth.admin.updateUserById(userId, { password });
     if (error) return { ok: false, message: `비밀번호 변경 실패: ${error.message}` };
   } catch (e) {
     return { ok: false, message: (e as Error).message };
   }
-  return { ok: true, message: "임시 비밀번호로 변경했습니다. 직원에게 직접 전달하고, 로그인 후 바꾸도록 안내하세요." };
+
+  // 다음 로그인 때 본인 비밀번호로 바꾸게 한다 (대표 세션 → 감사로그에 기록)
+  const { error: flagErr } = await supabase.from("profiles").update({ must_change_password: true }).eq("id", userId);
+  if (flagErr) return { ok: true, message: "비밀번호는 바꿨지만 '첫 로그인 변경' 설정에 실패했습니다." };
+
+  return {
+    ok: true,
+    message:
+      target.role === "staff"
+        ? "생년월일로 초기화했습니다. 직원이 로그인하면 새 비밀번호를 정하게 됩니다."
+        : "임시 비밀번호로 초기화했습니다. 로그인하면 새 비밀번호를 정하게 됩니다.",
+  };
 }

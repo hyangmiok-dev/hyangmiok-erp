@@ -164,6 +164,53 @@ describe("권한 상승 방지", () => {
   });
 });
 
+describe("이름 아이디 · 첫 비밀번호 변경 (1단계 보완)", () => {
+  it("한글 이름 아이디를 저장할 수 있다", async () => {
+    await asUser(db, OWNER, (tx) =>
+      tx.query(`update public.profiles set login_id = '김민수2' where id = $1`, [STAFF2]),
+    );
+    const r = await db.query<{ login_id: string }>(`select login_id from public.profiles where id = $1`, [STAFF2]);
+    expect(r.rows[0].login_id).toBe("김민수2");
+  });
+
+  it("공백·특수문자가 있는 아이디는 거부된다", async () => {
+    await expect(
+      asUser(db, OWNER, (tx) => tx.query(`update public.profiles set login_id = '김 민수' where id = $1`, [STAFF2])),
+    ).rejects.toThrow(/profiles_login_id_check/);
+  });
+
+  it("대표는 비밀번호 변경요구를 설정할 수 있다", async () => {
+    await asUser(db, OWNER, (tx) =>
+      tx.query(`update public.profiles set must_change_password = true where id = $1`, [STAFF1]),
+    );
+    const r = await db.query<{ v: boolean }>(`select must_change_password v from public.profiles where id = $1`, [
+      STAFF1,
+    ]);
+    expect(r.rows[0].v).toBe(true);
+  });
+
+  it("직원은 본인의 비밀번호 변경요구를 스스로 해제할 수 없다", async () => {
+    await expect(
+      asUser(db, STAFF1, (tx) =>
+        tx.query(`update public.profiles set must_change_password = false where id = $1`, [STAFF1]),
+      ),
+    ).rejects.toThrow(/권한이 없습니다/);
+  });
+
+  it("서버(service_role)는 해제할 수 있다", async () => {
+    await asUser(
+      db,
+      null,
+      (tx) => tx.query(`update public.profiles set must_change_password = false where id = $1`, [STAFF1]),
+      "service_role",
+    );
+    const r = await db.query<{ v: boolean }>(`select must_change_password v from public.profiles where id = $1`, [
+      STAFF1,
+    ]);
+    expect(r.rows[0].v).toBe(false);
+  });
+});
+
 describe("소속 지점 일괄 변경 (set_store_memberships)", () => {
   it("대표는 소속을 교체할 수 있고 결과가 정확하다", async () => {
     const s2 = await storeId(db, "S2");

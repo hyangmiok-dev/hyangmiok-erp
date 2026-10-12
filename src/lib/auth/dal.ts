@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isEnvConfigured } from "@/lib/env";
 import { isRole, type Role, type SessionUser } from "@/lib/auth/roles";
 
+export const CHANGE_PASSWORD_PATH = "/change-password";
+
 /**
  * Data Access Layer: 현재 사용자 확인은 반드시 여기를 거친다.
  * - JWT 는 getClaims() 로 서명 검증한다 (쿠키를 그대로 믿지 않음).
@@ -21,7 +23,11 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   if (error || !userId) return null;
 
   const [{ data: profile }, { data: memberships }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, role, login_id, is_active").eq("id", userId).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("id, full_name, role, login_id, is_active, must_change_password")
+      .eq("id", userId)
+      .maybeSingle(),
     supabase.from("store_members").select("store_id").eq("user_id", userId),
   ]);
 
@@ -34,13 +40,18 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
     loginId: (profile.login_id as string | null) ?? null,
     email: (claimsData.claims.email as string | undefined) ?? null,
     storeIds: (memberships ?? []).map((m) => m.store_id as string),
+    mustChangePassword: Boolean(profile.must_change_password),
   };
 });
 
-/** 로그인 필수. 아니면 /login 으로 이동. */
-export async function requireUser(): Promise<SessionUser> {
+/**
+ * 로그인 필수. 아니면 /login 으로 이동.
+ * 비밀번호 변경이 필요한 사용자는 변경 화면으로 보낸다 (그 화면 자체는 allowPendingPassword).
+ */
+export async function requireUser(opts: { allowPendingPassword?: boolean } = {}): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (user.mustChangePassword && !opts.allowPendingPassword) redirect(CHANGE_PASSWORD_PATH);
   return user;
 }
 
@@ -54,9 +65,13 @@ export async function requireRole(roles: readonly Role[]): Promise<SessionUser> 
 /** 서버 액션용: redirect/forbidden 대신 결과 객체를 돌려준다. */
 export async function authorizeAction(
   roles: readonly Role[],
+  opts: { allowPendingPassword?: boolean } = {},
 ): Promise<{ ok: true; user: SessionUser } | { ok: false; message: string }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, message: "로그인이 필요합니다. 다시 로그인해 주세요." };
+  if (user.mustChangePassword && !opts.allowPendingPassword) {
+    return { ok: false, message: "먼저 비밀번호를 변경해 주세요." };
+  }
   if (!roles.includes(user.role)) return { ok: false, message: "이 작업을 할 권한이 없습니다." };
   return { ok: true, user };
 }

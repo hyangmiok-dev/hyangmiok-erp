@@ -15,13 +15,12 @@ export function LoginForm() {
     <form action={action} className="space-y-4" noValidate>
       <input type="hidden" name="next" value={next} />
       <div className="space-y-1.5">
-        <Label htmlFor="identifier">아이디 또는 이메일</Label>
+        <Label htmlFor="identifier">이름(아이디) 또는 이메일</Label>
         <Input
           id="identifier"
           name="identifier"
           autoComplete="username"
           autoCapitalize="none"
-          inputMode="email"
           required
           defaultValue={state.identifier}
           className="h-11 text-base"
