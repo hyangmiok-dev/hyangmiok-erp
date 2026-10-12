@@ -26,7 +26,7 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 6. 금액은 원 단위 정수(bigint). 부동소수점 누적 금지. 표시는 `formatKRW`. **값 없음은 '미입력'**, 0 으로 나눔은 `safeDivide` → '계산불가'.
 7. 날짜는 Asia/Seoul. 영업일 키는 `seoulDateKey()`. `new Date().toISOString().slice(0,10)` 금지(UTC).
 8. 확인되지 않은 사업 정보(주소·좌석수 등)를 임의로 채우지 않는다 → NULL.
-9. 예시/테스트 데이터는 운영 DB 에 넣지 않는다. 개발·운영 Supabase 프로젝트 분리. 시드 스크립트는 `NEXT_PUBLIC_APP_ENV=production` 에서 실행 거부해야 함.
+9. 예시/테스트 데이터는 운영 DB 에 넣지 않는다. **현재 Supabase 프로젝트는 하나뿐이며 실전(운영)용이다 (대표 결정 2026-10-13)** — 로컬 `.env.local` 도 운영 DB 를 가리킨다. 따라서 로컬에서 쓰기 테스트·시드 금지, 점검은 읽기 전용(`scripts/verify-supabase.mjs`)만. 새 기능 시험은 PGlite 테스트로 하고, 실 DB 시험이 꼭 필요하면 개발용 프로젝트를 새로 만들어 `setup-new-project.sql` 로 구성한다.
 10. 급여·법정수당 계산은 '검증 전 초안'으로만 표시. 확정 급여처럼 보이게 하지 말 것.
 11. 실제로 실행·검증하지 않은 기능은 `docs/STATUS.md` 에 완료로 표시하지 않는다.
 
@@ -40,12 +40,12 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 ## DB 변경 절차
 1. `supabase/migrations/YYYYMMDDHHMMSS_설명.sql` 새 파일 추가 (기존 적용된 파일 수정 금지).
 2. `tests/db/` 에 RLS·무결성 테스트 추가 → `node scripts/build-setup-sql.mjs`(새 프로젝트용 통합 SQL 갱신) → `npm test` (PGlite 가 실제 SQL 을 실행, 통합 SQL 불일치도 검사).
-3. Supabase 적용: **개발(hyangmiok-dev)·운영(hyangmiok-prod) 두 프로젝트 모두** SQL Editor 에 새 마이그레이션 파일만 붙여넣기. 적용 확인: `node --env-file=.env.local scripts/verify-supabase.mjs` (로컬은 개발 프로젝트).
+3. Supabase 적용: 운영 프로젝트 SQL Editor 에 **새 마이그레이션 파일만** 붙여넣기 (대표가 실행). 적용 전 PGlite 테스트 통과 필수. 적용 확인: `node --env-file=.env.local scripts/verify-supabase.mjs` (로컬은 개발 프로젝트).
 4. 보안 정의 함수는 `security definer` + `set search_path = ''` + 완전한 스키마명. 단, 호출자 역할(`current_user`)이 필요한 트리거는 `security invoker`.
 
 ## 배포
 - Vercel(서울 icn1, `vercel.json`) + GitHub 연동: main 에 push 하면 자동 배포.
-- Vercel 환경변수는 **운영 Supabase** 값 + `NEXT_PUBLIC_APP_ENV=production`. 로컬 `.env.local` 은 개발 프로젝트.
+- Vercel 환경변수는 `.env.local` 과 같은 운영 Supabase 값 + `NEXT_PUBLIC_APP_ENV=production`.
 - NEXT_PUBLIC_* 는 빌드 때 박히므로 환경변수 변경 후에는 Redeploy 필요.
 
 ## 폴더
