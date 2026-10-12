@@ -34,16 +34,30 @@ export async function saveExpenseAction(_prev: ActionResult, fd: FormData): Prom
   const v = parsed.data;
   if (v.expenseDate > seoulDateKey()) return { ok: false, fieldErrors: { expenseDate: "미래 날짜는 입력할 수 없습니다." } };
 
+  const supabase = await createClient();
+
+  // 거래처 연결: 버튼으로 고른 거래처, 또는 직접 쓴 이름이 거래처 목록과 같으면 자동 연결
+  let vendorId: string | null = v.vendorId ?? null;
+  let vendorName = v.vendor;
+  if (vendorId) {
+    const { data: found } = await supabase.from("vendors").select("id, name").eq("id", vendorId).maybeSingle();
+    if (found) vendorName = vendorName ?? found.name;
+    else vendorId = null;
+  } else if (vendorName) {
+    const { data: found } = await supabase.from("vendors").select("id").eq("name", vendorName).maybeSingle();
+    vendorId = found?.id ?? null;
+  }
+
   const row = {
     store_id: v.storeId,
     expense_date: v.expenseDate,
     category_id: v.categoryId,
-    vendor: v.vendor,
+    vendor: vendorName,
+    vendor_id: vendorId,
     description: v.description,
     amount: v.amount,
     basis: v.basis,
   };
-  const supabase = await createClient();
 
   if (v.id) {
     let q = supabase.from("expenses").update(row).eq("id", v.id);
@@ -90,7 +104,7 @@ export async function copyRecurringAction(storeId: string, month: string): Promi
   const [{ data: lastRows, error: e1 }, { data: curRows, error: e2 }] = await Promise.all([
     supabase
       .from("expenses")
-      .select("expense_date, category_id, vendor, description, amount, expense_categories!inner(section)")
+      .select("expense_date, category_id, vendor, vendor_id, description, amount, expense_categories!inner(section)")
       .eq("store_id", storeId)
       .gte("expense_date", last.start)
       .lte("expense_date", last.end)
@@ -113,6 +127,7 @@ export async function copyRecurringAction(storeId: string, month: string): Promi
       expense_date: date,
       category_id: r.category_id,
       vendor: r.vendor,
+      vendor_id: r.vendor_id,
       description: `[지난달 복사·금액 확인 필요] ${r.description ?? ""}`.trim().slice(0, 200),
       amount: r.amount,
       basis: "estimated" as const,

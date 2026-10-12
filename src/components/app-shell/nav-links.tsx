@@ -11,6 +11,8 @@ import {
   Home,
   ReceiptText,
   HandCoins,
+  Truck,
+  PackageSearch,
   Store,
   UserCog,
   Users,
@@ -31,6 +33,8 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   compare: BarChart3,
   store: Store,
   expense: HandCoins,
+  vendor: Truck,
+  purchases: PackageSearch,
   users: UserCog,
   audit: History,
 };

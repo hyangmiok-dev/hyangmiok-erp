@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,9 +22,18 @@ export interface CategoryOption {
   description: string | null;
 }
 
+export interface VendorOption {
+  id: string;
+  name: string;
+  items: string | null;
+  defaultCategoryId: string | null;
+  storeIds: string[];
+}
+
 export interface EditingExpense {
   id: string;
   storeId: string;
+  vendorId: string | null;
   date: string;
   categoryId: string;
   vendor: string | null;
@@ -39,6 +49,7 @@ export function ExpenseForm({
   stores,
   categories,
   vendors,
+  vendorList,
   defaultStoreId,
   defaultDate,
   today,
@@ -48,6 +59,8 @@ export function ExpenseForm({
   stores: { id: string; name: string }[];
   categories: CategoryOption[];
   vendors: string[];
+  /** 거래처 관리 목록 (거래 중인 것만) */
+  vendorList: VendorOption[];
   defaultStoreId: string;
   defaultDate: string;
   today: string;
@@ -60,7 +73,23 @@ export function ExpenseForm({
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
   // 항목은 기본값 없이 직접 고르게 한다 (기본값 때문에 엉뚱한 항목으로 저장되는 실수 방지)
   const [categoryId, setCategoryId] = useState(editing?.categoryId ?? "");
+  const [storeId, setStoreId] = useState(editing?.storeId ?? defaultStoreId);
   const [vendor, setVendor] = useState(editing?.vendor ?? "");
+  const [vendorId, setVendorId] = useState(editing?.vendorId ?? "");
+  const storeVendors = vendorList.filter((v) => v.storeIds.includes(storeId));
+  const storeName = stores.find((s) => s.id === storeId)?.name ?? "";
+
+  function pickVendor(v: VendorOption) {
+    setVendor(v.name);
+    setVendorId(v.id);
+    if (v.defaultCategoryId) setCategoryId(v.defaultCategoryId);
+    (document.getElementById("amount") as HTMLInputElement | null)?.focus();
+  }
+
+  function typeVendor(text: string) {
+    setVendor(text);
+    setVendorId(vendorList.find((v) => v.name === text.trim())?.id ?? "");
+  }
   const [description, setDescription] = useState(editing?.description ?? "");
   const fe = state.fieldErrors ?? {};
   const cat = categories.find((c) => c.id === categoryId);
@@ -108,7 +137,7 @@ export function ExpenseForm({
               <Input value={stores.find((s) => s.id === editing.storeId)?.name ?? ""} disabled className="h-10 text-base" />
             </>
           ) : (
-            <NativeSelect id="storeId" name="storeId" defaultValue={defaultStoreId}>
+            <NativeSelect id="storeId" name="storeId" value={storeId} onChange={(e) => setStoreId(e.target.value)}>
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -128,6 +157,39 @@ export function ExpenseForm({
           />
         </Field>
       </div>
+
+      <input type="hidden" name="vendorId" value={vendorId} />
+      <fieldset>
+        <legend className="mb-1.5 text-sm font-medium">거래처 빠르게 고르기</legend>
+        {storeVendors.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {storeVendors.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                title={v.items ?? undefined}
+                aria-pressed={v.id === vendorId}
+                onClick={() => pickVendor(v)}
+                className={cn(
+                  "h-10 rounded-full border px-3.5 text-sm",
+                  v.id === vendorId ? "border-foreground bg-foreground text-background" : "bg-background hover:bg-muted",
+                )}
+              >
+                {v.name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {storeName}과(와) 연결된 거래처가 없어요.{" "}
+            <Link href="/admin/vendors" className="underline underline-offset-2">
+              거래처 관리
+            </Link>
+            에서 거래 지점을 체크하면 여기에 버튼이 생겨요.
+          </p>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">거래처를 누르면 항목도 자동으로 골라져요. 목록에 없으면 아래 거래처 칸에 직접 쓰세요.</p>
+      </fieldset>
 
       <fieldset>
         <legend className="mb-1.5 text-sm font-medium">항목 (하나 고르기)</legend>
@@ -160,9 +222,9 @@ export function ExpenseForm({
       </fieldset>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="거래처 / 받는 사람" htmlFor="vendor" error={fe.vendor} hint="예: 청수상사, 한전, 건물주">
-          <Input id="vendor" name="vendor" list="vendor-list" value={vendor} onChange={(e) => setVendor(e.target.value)} maxLength={60} autoComplete="off" className="h-10 text-base" />
+          <Input id="vendor" name="vendor" list="vendor-list" value={vendor} onChange={(e) => typeVendor(e.target.value)} maxLength={60} autoComplete="off" className="h-10 text-base" />
           <datalist id="vendor-list">
-            {vendors.map((v) => (
+            {[...new Set([...vendorList.map((v) => v.name), ...vendors])].map((v) => (
               <option key={v} value={v} />
             ))}
           </datalist>

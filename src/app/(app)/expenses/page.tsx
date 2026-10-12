@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireRole } from "@/lib/auth/dal";
 import { listAccessibleStores } from "@/lib/data/stores";
 import { getExpense, listCategories, listExpenses, recentVendors } from "@/lib/data/expenses";
+import { listVendors } from "@/lib/data/vendors";
 import { formatKRW, seoulDateKey } from "@/lib/format";
 import { isMonthKey, monthRange, prevMonth, SECTION_LABEL, type Section } from "@/lib/pnl";
 import { addDays, shortDateKo } from "@/lib/period";
@@ -45,12 +46,16 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
   const editId = first(sp.edit);
 
   const range = monthRange(month);
-  const [categories, expenses, vendors, editing] = await Promise.all([
+  const [categories, expenses, vendors, editing, vendorRows] = await Promise.all([
     listCategories(),
     listExpenses(range, [store.id]),
     recentVendors(),
     editId ? getExpense(editId) : Promise.resolve(null),
+    listVendors(),
   ]);
+  const vendorList = vendorRows
+    .filter((v) => v.isActive)
+    .map((v) => ({ id: v.id, name: v.name, items: v.items, defaultCategoryId: v.defaultCategoryId, storeIds: v.storeIds }));
 
   const filtered = q
     ? expenses.filter((e) => `${e.vendor ?? ""} ${e.description ?? ""} ${e.categoryName}`.includes(q))
@@ -86,6 +91,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
           stores={stores.map((s) => ({ id: s.id, name: s.name }))}
           categories={categories}
           vendors={vendors}
+          vendorList={vendorList}
           defaultStoreId={store.id}
           defaultDate={defaultDate}
           today={today}
@@ -94,6 +100,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
               ? {
                   id: editing.id,
                   storeId: editing.storeId,
+                  vendorId: editing.vendorId,
                   date: editing.date,
                   categoryId: editing.categoryId,
                   vendor: editing.vendor,

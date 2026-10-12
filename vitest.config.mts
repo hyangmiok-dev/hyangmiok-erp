@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
-    exclude: ["node_modules", ".open-next", ".wrangler"],
+    exclude: ["node_modules", ".open-next", ".wrangler", ".netlify"],
     testTimeout: 30_000,
   },
 });

@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     // Cloudflare(OpenNext) 빌드 결과물
     ".open-next/**",
     ".wrangler/**",
+    ".netlify/**",
   ]),
 ]);
 

@@ -80,6 +80,8 @@ export type NavIcon =
   | "recipe"
   | "compare"
   | "expense"
+  | "vendor"
+  | "purchases"
   | "store"
   | "users"
   | "audit";
@@ -105,8 +107,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/staff", label: "직원·근태", icon: "staff", roles: MANAGERS, stage: 4, group: "업무" },
   { href: "/expenses", label: "지출 입력", icon: "expense", roles: ["owner"], stage: 3, group: "업무" },
   { href: "/pnl", label: "손익", icon: "pnl", roles: ["owner", "hq_manager"], stage: 3, group: "분석" },
+  { href: "/purchases", label: "거래처별 매입", icon: "purchases", roles: ["owner", "hq_manager"], stage: 3, group: "분석" },
   { href: "/compare", label: "지점 비교", icon: "compare", roles: ["owner", "hq_manager"], stage: 6, group: "분석" },
   { href: "/admin/stores", label: "지점 설정", icon: "store", roles: ["owner"], stage: 2, group: "관리" },
+  { href: "/admin/vendors", label: "거래처 관리", icon: "vendor", roles: ["owner"], stage: 3, group: "관리" },
   { href: "/admin/users", label: "계정 관리", icon: "users", roles: ["owner"], stage: 1, group: "관리" },
   { href: "/admin/audit", label: "변경 이력", icon: "audit", roles: ["owner"], stage: 1, group: "관리" },
 ];

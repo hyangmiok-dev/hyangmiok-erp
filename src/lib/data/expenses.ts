@@ -14,6 +14,7 @@ export interface Category {
 export interface ExpenseDetail extends ExpenseItem {
   id: string;
   vendor: string | null;
+  vendorId: string | null;
   description: string | null;
   updatedAt: string;
 }
@@ -34,7 +35,7 @@ export async function listExpenses(range: DateRange, storeIds?: string[]): Promi
   const supabase = await createClient();
   let q = supabase
     .from("expenses")
-    .select("id, store_id, expense_date, category_id, vendor, description, amount, basis, updated_at, expense_categories(name, section)")
+    .select("id, store_id, expense_date, category_id, vendor, vendor_id, description, amount, basis, updated_at, expense_categories(name, section)")
     .gte("expense_date", range.start)
     .lte("expense_date", range.end)
     .order("expense_date", { ascending: false })
@@ -52,6 +53,7 @@ export async function listExpenses(range: DateRange, storeIds?: string[]): Promi
       categoryName: cat?.name ?? "?",
       section: cat?.section ?? "opex",
       vendor: r.vendor,
+      vendorId: r.vendor_id,
       description: r.description,
       amount: Number(r.amount),
       basis: r.basis as ExpenseItem["basis"],
