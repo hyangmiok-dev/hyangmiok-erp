@@ -55,8 +55,9 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 - Vercel 은 무료(Hobby)가 비상업 전용이라 사용하지 않음.
 
 ## Supabase Edge Function (거래명세표 AI 읽기)
-- `supabase/functions/read-statement/` — `index.ts`(Deno, Claude API 호출), `handler.ts`(순서·검사, Node 테스트), `schema.ts`(AI 출력 형식·지시문, Next 앱도 import), `deno.json`(npm 버전 고정).
-- Netlify 무료 함수는 10초 제한 → AI 호출은 브라우저에서 Edge Function(무료 150초)으로 직접. 사용자 JWT 로 동작(RLS), 비밀값은 `ANTHROPIC_API_KEY` 하나(대표가 대시보드 Secrets 에 입력).
+- AI 는 **구글 Gemini 무료 등급** (대표 결정 2026-10-13, 유료 Claude API 가입 대신). 무료 등급은 구글이 입력을 제품 개선에 쓸 수 있음 — 대표가 알고 선택함.
+- `supabase/functions/read-statement/` — `index.ts`(Deno 진입점, 사용자 권한), `gemini.ts`(Gemini REST 직접 호출 — SDK 는 수십 MB 라 제외), `handler.ts`(순서·검사), `schema.ts`(AI 출력 형식·지시문, Next 앱도 import), `deno.json`(npm 버전 고정). gemini/handler/schema 는 Node 테스트로 검증.
+- Netlify 무료 함수는 10초 제한 → AI 호출은 브라우저에서 Edge Function(무료 150초)으로 직접. 사용자 JWT 로 동작(RLS), 비밀값은 `GEMINI_API_KEY` 하나(aistudio.google.com 에서 대표가 만들어 대시보드 Secrets 에 입력).
 - 타입 검사: `npx deno@2.9.6 check --no-lock --config supabase/functions/read-statement/deno.json supabase/functions/read-statement/index.ts`
 - 배포(로그인 1번 필요: `npx supabase@2.118.0 login`): `npx supabase@2.118.0 functions deploy read-statement --project-ref <ref> --use-api`
 - tsconfig 는 `supabase/functions` 를 제외한다 (Deno 전용). `schema.ts`·`handler.ts` 는 앱/테스트에서 import 될 때 검사된다.

@@ -166,7 +166,7 @@ describe("AI 읽기 기록", () => {
   const begin = (uid: string, id: string) =>
     rpc<{ r: { photo_path: string; vendor_name: string; attempt: number } }>(uid, `select public.begin_statement_ai($1) as r`, [id]);
   const finish = (uid: string, id: string, ok: boolean, result: unknown, error: string | null = null) =>
-    rpc(uid, `select public.finish_statement_ai($1, $2, $3::jsonb, 'claude-opus-5-5', '{"input_tokens":10}'::jsonb, $4)`, [
+    rpc(uid, `select public.finish_statement_ai($1, $2, $3::jsonb, 'gemini-3.8-flash', '{"input_tokens":10}'::jsonb, $4)`, [
       id,
       ok,
       result === null ? null : JSON.stringify(result),

@@ -5,8 +5,11 @@
  */
 import { z } from "zod";
 
-/** 대표 결정 2026-10-13: 가장 정확한 모델 */
-export const MODEL = "claude-opus-5-5";
+/**
+ * 대표 결정 2026-10-13: 구글 Gemini 무료 등급 (유료 Claude API 가입 대신).
+ * 앞의 모델이 무료 한도 초과(429)·혼잡(503)이면 다음 모델로. 둘 다 무료 등급이 있는 정식(Stable) Flash 모델.
+ */
+export const MODELS = ["gemini-3.8-flash", "gemini-3.6-flash"] as const;
 
 export const LINE_FIELDS = ["name", "quantity", "unit", "unit_price", "amount", "tax"] as const;
 export const HEAD_FIELDS = ["vendor_name", "date", "total", "previous_balance", "balance"] as const;
@@ -38,6 +41,13 @@ export const StatementRead = z.object({
 });
 export type StatementRead = z.infer<typeof StatementRead>;
 export type StatementLine = z.infer<typeof StatementLine>;
+
+/** Gemini 구조화 출력용 JSON Schema (Gemini 가 지원하지 않는 $schema 키는 뺀다) */
+export function statementJsonSchema(): Record<string, unknown> {
+  const { $schema: _drop, ...rest } = z.toJSONSchema(StatementRead) as Record<string, unknown>;
+  void _drop;
+  return rest;
+}
 
 export function systemPrompt(today: string): string {
   return [

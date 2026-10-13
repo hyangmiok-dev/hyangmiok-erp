@@ -23,7 +23,7 @@ export const STATUS_LABEL: Record<StatementStatus, string> = {
 export const VAT_ITEM_NAME = "부가세";
 export const MAX_AI_ATTEMPTS = 3;
 
-/** AI 에 보낼 사진 (선명하게, Claude 최대 해상도 이내) / 보관할 사진 (작게: 무료 저장공간 1GB 절약) */
+/** AI 에 보낼 사진 (선명하게, 약 3.75MP 이내 — 손글씨 숫자를 읽기 위해) / 보관할 사진 (작게: 무료 저장공간 1GB 절약) */
 export const AI_IMAGE = { maxEdge: 2576, maxPixels: 3_750_000, quality: 0.85 } as const;
 export const ARCHIVE_IMAGE = { maxEdge: 1600, maxPixels: 2_000_000, quality: 0.7 } as const;
 /** Supabase 무료 저장공간 */

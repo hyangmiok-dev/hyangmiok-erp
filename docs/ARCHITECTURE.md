@@ -85,7 +85,7 @@ flowchart LR
   P -->|기록 만들기 서버 액션| PG[(PostgreSQL)]
   P -->|선명한 사진 + 사용자 JWT| EF[Edge Function<br/>read-statement]
   EF -->|begin/finish_statement_ai<br/>사용자 권한| PG
-  EF -->|ANTHROPIC_API_KEY| C[Claude Opus 5.5<br/>구조화 출력]
+  EF -->|GEMINI_API_KEY| C[구글 Gemini Flash<br/>무료 등급 · JSON 출력]
   P -->|확인 후 확정 서버 액션| PG
 ```
 - AI 결과는 '제안'일 뿐: 올린 사람이 사진과 비교해 확정해야 지출(`confirm_purchase_statement`, SECURITY DEFINER — 그 명세표 1장 분량만)이 생긴다.

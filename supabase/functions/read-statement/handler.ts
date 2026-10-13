@@ -29,7 +29,7 @@ export interface ReadResponse {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** JPEG base64 는 '/9j/' 로 시작한다 */
 const JPEG_BASE64 = /^\/9j\/[A-Za-z0-9+/]+={0,2}$/;
-/** Claude 이미지 한 장 최대 5MB */
+/** AI 에 보내는 사진 한 장 최대 5MB (Gemini 요청 전체 한도 20MB 안에서 넉넉히) */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function base64Bytes(b64: string): number {
