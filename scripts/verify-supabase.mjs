@@ -98,7 +98,7 @@ for (const fn of ["record_delivery", "delivery_items", "recent_deliveries", "can
     ? { p_store_id: null, p_vendor_id: null, p_date: null, p_lines: [], p_vat: 0, p_on_credit: null, p_memo: null }
     : fn === "cancel_delivery" ? { p_expense_id: null }
     : fn === "save_order" ? { p_store_id: null, p_lines: [], p_submit: false }
-    : fn === "complete_receipt" ? { p_order_id: null, p_vendor_id: null, p_lines: [], p_vat: 0, p_receipt_total: null, p_memo: null }
+    : fn === "complete_receipt" ? { p_order_id: null, p_vendor_id: null, p_lines: [], p_amount: 0, p_memo: null }
     : fn.startsWith("send_") ? {} : { p_store_id: null };
   const { error: e } = await anon.rpc(fn, args);
   if (e) ok(`${fn}: 비로그인 실행 차단 (${e.code ?? e.message})`);
