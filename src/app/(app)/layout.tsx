@@ -27,7 +27,8 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
               향미옥 경영관리
             </Link>
           </header>
-          <main className="flex-1 px-4 py-5 lg:px-8 lg:py-8">{children}</main>
+          {/* 아래 여백: 무료 넷리파이의 'Powered by Netlify' 표시(오른쪽 아래)에 마지막 내용이 가려지지 않게 */}
+          <main className="flex-1 px-4 pt-5 pb-24 lg:px-8 lg:pt-8">{children}</main>
         </div>
       </div>
     </div>

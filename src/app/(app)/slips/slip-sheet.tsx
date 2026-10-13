@@ -180,18 +180,17 @@ export function SlipSheet({
         </ul>
       </section>
 
-      <div className="sticky bottom-0 z-10 -mx-4 flex items-center gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
-        <p className="min-w-0 flex-1 text-sm" aria-live="polite">
-          {dirty ? (
-            <>
-              <b className="text-amber-700">{entries.length}곳</b> 바뀜 · 아직 저장 안 됨
-            </>
-          ) : (
-            <span className="text-muted-foreground">저장된 상태예요</span>
-          )}
-        </p>
-        <Button type="button" size="lg" className="h-12 min-w-28 text-base" disabled={!dirty || pending} onClick={save}>
-          {pending ? "저장 중…" : "저장"}
+      {/* 저장 버튼은 왼쪽: 무료 넷리파이가 오른쪽 아래에 'Powered by Netlify' 표시를 띄워 오른쪽을 가린다 */}
+      <div className="sticky bottom-0 z-10 -mx-4 flex items-center border-t bg-background/95 px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-xl sm:border">
+        <Button
+          type="button"
+          size="lg"
+          className="h-12 min-w-40 text-base"
+          disabled={!dirty || pending}
+          onClick={save}
+          aria-live="polite"
+        >
+          {pending ? "저장 중…" : dirty ? `저장 (${entries.length}곳)` : "저장됨"}
         </Button>
       </div>
 
