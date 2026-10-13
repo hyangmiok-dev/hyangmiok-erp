@@ -56,7 +56,7 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
 
 ## 발주 · 입고 확인 (0900)
 - `/orders`(저녁 발주, 직원 포함) → `app.send_daily_orders()` 를 pg_cron 이 매일 12:00 UTC(밤 9시 한국)에 실행 → 텔레그램(pg_net, Vault `telegram_bot_token`/`telegram_chat_id`) → `/receiving`(아침, 줄마다 같음/다름/안 옴 → `complete_receipt` 가 지출 생성).
-- 텔레그램 설정 SQL 은 마이그레이션이 아니라 `supabase/telegram-setup.sql`(대표가 토큰을 직접 넣어 1회 실행). PGlite 테스트는 vault/net 을 모사한다(stage3g).
+- 텔레그램 설정 SQL 은 마이그레이션이 아니라 `supabase/telegram-setup.sql`(대표가 토큰을 직접 넣어 1회 실행). PGlite 테스트는 vault/net 을 모사한다(stage3g). 설정 SQL 자체도 `tests/db/telegram-setup.test.ts` 가 실행해 본다(①② 자리 바꾸기·다시 실행·잘못된 값 거부).
 - 발주 날짜 규칙: 한국 시간 21시 이후 발주는 다음 날 (`app.order_day()` = `orderDay()`), 보낸 발주는 잠금.
 
 ## 입고 입력 (거래명세표)
