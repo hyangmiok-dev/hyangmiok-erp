@@ -58,16 +58,16 @@ describe("메뉴 노출", () => {
     expect(hrefs).not.toContain("/admin/users");
     expect(hrefs).not.toContain("/compare");
   });
-  it("관리 메뉴는 대표만 (발주 품목 관리는 관리자도 — 대표 결정 2026-10-13)", () => {
+  it("관리 메뉴는 대표만", () => {
     for (const item of NAV_ITEMS.filter((i) => i.href.startsWith("/admin"))) {
-      if (item.href === "/admin/order-items") expect(item.roles).toEqual(["owner", "hq_manager", "store_manager"]);
-      else expect(item.roles).toEqual(["owner"]);
+      expect(item.roles).toEqual(["owner"]);
     }
   });
 
-  it("발주·입고 확인은 직원까지 모두", () => {
-    for (const href of ["/orders", "/receiving"]) {
-      expect(NAV_ITEMS.find((i) => i.href === href)?.roles).toEqual(["owner", "hq_manager", "store_manager", "staff"]);
+  it("전표 입력은 직원까지 모두, 텔레그램 발주 메뉴는 숨김 (대표 결정 2026-10-13)", () => {
+    expect(NAV_ITEMS.find((i) => i.href === "/slips")?.roles).toEqual(["owner", "hq_manager", "store_manager", "staff"]);
+    for (const href of ["/orders", "/receiving", "/deliveries", "/admin/order-items"]) {
+      expect(NAV_ITEMS.find((i) => i.href === href)).toBeUndefined();
     }
   });
 });

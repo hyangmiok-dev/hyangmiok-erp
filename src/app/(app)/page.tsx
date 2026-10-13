@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { ClipboardList, PackageCheck, ReceiptText } from "lucide-react";
+import { PackageCheck, ReceiptText } from "lucide-react";
 import { requireUser } from "@/lib/auth/dal";
 import { listAccessibleStores } from "@/lib/data/stores";
 import { ROLE_LABEL, type SessionUser } from "@/lib/auth/roles";
@@ -46,16 +46,10 @@ async function StaffHome({ user }: { user: SessionUser }) {
   return (
     <>
       <PageHeader title="내 업무" description={`${user.fullName} · ${ROLE_LABEL[user.role]} · ${formatDateKo(new Date())}`} />
-      <div className="grid grid-cols-2 gap-3">
-        <Link href="/orders" className={buttonVariants({ size: "lg", className: "h-20 flex-col gap-1 text-lg" })}>
-          <ClipboardList className="size-6" /> 발주하기
-          <span className="text-xs font-normal opacity-80">밤 9시 전에 완료</span>
-        </Link>
-        <Link href="/receiving" className={buttonVariants({ size: "lg", variant: "outline", className: "h-20 flex-col gap-1 text-lg" })}>
-          <PackageCheck className="size-6" /> 입고 확인
-          <span className="text-xs font-normal text-muted-foreground">아침 물건 받을 때</span>
-        </Link>
-      </div>
+      <Link href="/slips" className={buttonVariants({ size: "lg", className: "h-20 w-full flex-col gap-1 text-lg" })}>
+        <PackageCheck className="size-6" /> 전표 입력
+        <span className="text-xs font-normal opacity-80">아침에 전표가 오면 총금액만</span>
+      </Link>
       <div className="mt-4 rounded-lg border bg-muted/30 p-4 text-sm">
         근무 스케줄·출퇴근·오픈/마감 체크리스트는 4단계에서 이 화면에 추가됩니다.
       </div>

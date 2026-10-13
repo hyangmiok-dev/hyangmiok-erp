@@ -155,11 +155,8 @@ export async function Dashboard({ searchParams, user }: { searchParams: SP; user
                   {c.store.name}
                 </h3>
                 <span className="flex gap-1">
-                  <Link href={`/orders?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                    발주
-                  </Link>
-                  <Link href={`/receiving?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                    입고 확인
+                  <Link href={`/slips?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    전표 입력
                   </Link>
                   <Link href={`/sales?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
                     매출 입력

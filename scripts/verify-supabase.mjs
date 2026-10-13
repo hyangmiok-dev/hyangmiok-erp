@@ -71,6 +71,14 @@ else {
   const noVendor = oItems.filter((i) => !i.vendor_id).length;
   ok(`발주 품목표 적용됨 (${[...byStore].map(([c, n]) => `${c} ${n}개`).join(", ")}, 거래처 미정 ${noVendor}개)`);
 }
+const { error: slipColErr } = await admin.from("expenses").select("is_slip").limit(1);
+const { error: slipFnErr } = await admin.rpc("slip_days", { p_store_id: "00000000-0000-4000-8000-000000000000" });
+if (slipColErr) bad(`전표 입력 마이그레이션(20261013001000) 미적용: ${slipColErr.message}`);
+else if (slipFnErr && /PGRST202|Could not find/i.test(`${slipFnErr.code} ${slipFnErr.message}`)) bad(`전표 입력 DB 함수 없음: ${slipFnErr.message}`);
+else {
+  const { count: slipCount } = await admin.from("expenses").select("id", { count: "exact", head: true }).eq("is_slip", true);
+  ok(`전표 입력 마이그레이션 적용됨 (적힌 전표 ${slipCount ?? 0}건)`);
+}
 const { data: bucket, error: bErr } = await admin.storage.getBucket("statements");
 if (bErr || !bucket) bad(`사진 보관함(statements 버킷) 없음: ${bErr?.message ?? ""}`);
 else if (bucket.public) bad("사진 보관함이 공개로 되어 있음! 비공개여야 함");
@@ -93,12 +101,14 @@ else bad("set_store_memberships: 비로그인 실행이 허용됨!");
 const { error: cRpcErr } = await anon.rpc("begin_statement_ai", { p_statement_id: "00000000-0000-4000-8000-000000000000" });
 if (cRpcErr) ok(`begin_statement_ai: 비로그인 실행 차단 (${cRpcErr.code ?? cRpcErr.message})`);
 else bad("begin_statement_ai: 비로그인 실행이 허용됨!");
-for (const fn of ["record_delivery", "delivery_items", "recent_deliveries", "cancel_delivery", "save_order", "complete_receipt", "send_telegram_test", "send_orders_now"]) {
+for (const fn of ["record_delivery", "delivery_items", "recent_deliveries", "cancel_delivery", "save_order", "complete_receipt", "send_telegram_test", "send_orders_now", "slip_sheet", "save_slips", "slip_days"]) {
   const args = fn === "record_delivery"
     ? { p_store_id: null, p_vendor_id: null, p_date: null, p_lines: [], p_vat: 0, p_on_credit: null, p_memo: null }
     : fn === "cancel_delivery" ? { p_expense_id: null }
     : fn === "save_order" ? { p_store_id: null, p_lines: [], p_submit: false }
     : fn === "complete_receipt" ? { p_order_id: null, p_vendor_id: null, p_lines: [], p_amount: 0, p_memo: null }
+    : fn === "slip_sheet" ? { p_store_id: null, p_date: null }
+    : fn === "save_slips" ? { p_store_id: null, p_date: null, p_entries: [] }
     : fn.startsWith("send_") ? {} : { p_store_id: null };
   const { error: e } = await anon.rpc(fn, args);
   if (e) ok(`${fn}: 비로그인 실행 차단 (${e.code ?? e.message})`);

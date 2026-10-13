@@ -38,7 +38,7 @@ beforeEach(async () => {
       insert into cron.job (jobname, schedule, command) values (p_name, p_schedule, p_command)
       on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command returning jobid $$;
   `);
-});
+}, 60_000); // 다른 DB 테스트와 동시에 돌면 PGlite 시작이 느릴 수 있음
 
 describe("텔레그램 설정 SQL (대표가 SQL Editor 에서 실행)", () => {
   it("①·② 를 안 바꾸고 Run 하면 아무것도 저장하지 않고 한국어로 알려 준다", async () => {

@@ -15,8 +15,7 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
     // 홈 화면 아이콘을 길게 누르면 바로 가기 (안드로이드)
     shortcuts: [
-      { name: "발주", short_name: "발주", url: "/orders" },
-      { name: "입고 확인", short_name: "입고", url: "/receiving" },
+      { name: "전표 입력", short_name: "전표", url: "/slips" },
       { name: "매출 입력", short_name: "매출", url: "/sales" },
     ],
   };
