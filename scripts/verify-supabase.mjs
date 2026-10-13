@@ -61,6 +61,16 @@ else ok(`거래명세표 사진 마이그레이션 적용됨 (기록 ${stCount ?
 const { error: dlvErr } = await admin.rpc("recent_deliveries", { p_store_id: "00000000-0000-4000-8000-000000000000" });
 if (dlvErr && /PGRST202|Could not find/i.test(`${dlvErr.code} ${dlvErr.message}`)) bad(`입고 빠른 입력 마이그레이션(20261013000800) 미적용: ${dlvErr.message}`);
 else ok("입고 빠른 입력 마이그레이션 적용됨 (DB 함수 있음)");
+const { data: oItems, error: oiErr } = await admin.from("order_items").select("store_id, vendor_id");
+if (oiErr) bad(`발주 마이그레이션(20261013000900) 미적용: ${oiErr.message}`);
+else {
+  const byStore = new Map((stores ?? []).map((s) => [s.code, 0]));
+  const { data: storeRows } = await admin.from("stores").select("id, code");
+  const codeOf = new Map((storeRows ?? []).map((s) => [s.id, s.code]));
+  for (const i of oItems) byStore.set(codeOf.get(i.store_id), (byStore.get(codeOf.get(i.store_id)) ?? 0) + 1);
+  const noVendor = oItems.filter((i) => !i.vendor_id).length;
+  ok(`발주 품목표 적용됨 (${[...byStore].map(([c, n]) => `${c} ${n}개`).join(", ")}, 거래처 미정 ${noVendor}개)`);
+}
 const { data: bucket, error: bErr } = await admin.storage.getBucket("statements");
 if (bErr || !bucket) bad(`사진 보관함(statements 버킷) 없음: ${bErr?.message ?? ""}`);
 else if (bucket.public) bad("사진 보관함이 공개로 되어 있음! 비공개여야 함");
@@ -72,7 +82,7 @@ ok(`Auth 사용자 ${authUsers?.users?.length ?? "?"}명 / 프로필 ${allProfil
 
 console.log("2) 비로그인(공개 키)으로는 데이터가 차단되는지");
 const anon = createClient(url, pub, { auth: { persistSession: false } });
-for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches", "expenses", "expense_categories", "inventory_counts", "vendors", "vendor_stores", "expense_lines", "vendor_payments", "purchase_statements"]) {
+for (const table of ["stores", "profiles", "store_members", "audit_logs", "daily_sales", "import_batches", "expenses", "expense_categories", "inventory_counts", "vendors", "vendor_stores", "expense_lines", "vendor_payments", "purchase_statements", "order_items", "order_price_changes", "orders", "order_lines", "order_receipts"]) {
   const { data, error } = await anon.from(table).select("*").limit(1);
   if (error || (data ?? []).length === 0) ok(`${table}: 차단됨${error ? ` (${error.code ?? error.message})` : " (0행)"}`);
   else bad(`${table}: 비로그인 상태에서 데이터가 보임!`);
@@ -83,10 +93,13 @@ else bad("set_store_memberships: 비로그인 실행이 허용됨!");
 const { error: cRpcErr } = await anon.rpc("begin_statement_ai", { p_statement_id: "00000000-0000-4000-8000-000000000000" });
 if (cRpcErr) ok(`begin_statement_ai: 비로그인 실행 차단 (${cRpcErr.code ?? cRpcErr.message})`);
 else bad("begin_statement_ai: 비로그인 실행이 허용됨!");
-for (const fn of ["record_delivery", "delivery_items", "recent_deliveries", "cancel_delivery"]) {
+for (const fn of ["record_delivery", "delivery_items", "recent_deliveries", "cancel_delivery", "save_order", "complete_receipt", "send_telegram_test", "send_orders_now"]) {
   const args = fn === "record_delivery"
     ? { p_store_id: null, p_vendor_id: null, p_date: null, p_lines: [], p_vat: 0, p_on_credit: null, p_memo: null }
-    : fn === "cancel_delivery" ? { p_expense_id: null } : { p_store_id: null };
+    : fn === "cancel_delivery" ? { p_expense_id: null }
+    : fn === "save_order" ? { p_store_id: null, p_lines: [], p_submit: false }
+    : fn === "complete_receipt" ? { p_order_id: null, p_vendor_id: null, p_lines: [], p_vat: 0, p_receipt_total: null, p_memo: null }
+    : fn.startsWith("send_") ? {} : { p_store_id: null };
   const { error: e } = await anon.rpc(fn, args);
   if (e) ok(`${fn}: 비로그인 실행 차단 (${e.code ?? e.message})`);
   else bad(`${fn}: 비로그인 실행이 허용됨!`);

@@ -81,6 +81,9 @@ export type NavIcon =
   | "compare"
   | "expense"
   | "delivery"
+  | "order"
+  | "receiving"
+  | "items"
   | "vendor"
   | "purchases"
   | "payables"
@@ -103,8 +106,11 @@ const MANAGERS: readonly Role[] = ["owner", "hq_manager", "store_manager"];
 export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/", label: "홈", icon: "home", roles: ALL, stage: 1, group: "업무" },
   { href: "/sales", label: "매출 입력", icon: "sales", roles: MANAGERS, stage: 2, group: "업무" },
-  // 아침에 물건 받으며 빠르게 적기 (지점 관리자도 입력, 대표 결정 2026-10-13 — 사진 AI 대신)
-  { href: "/deliveries", label: "입고 입력", icon: "delivery", roles: MANAGERS, stage: 3, group: "업무" },
+  // 저녁 발주 → 밤 9시 텔레그램 → 아침 입고 확인 (직원도 함께, 대표 결정 2026-10-13)
+  { href: "/orders", label: "발주", icon: "order", roles: ALL, stage: 3, group: "업무" },
+  { href: "/receiving", label: "입고 확인", icon: "receiving", roles: ALL, stage: 3, group: "업무" },
+  // 발주 없이 산 것 (마트 등) 빠르게 적기
+  { href: "/deliveries", label: "발주 없이 입고", icon: "delivery", roles: MANAGERS, stage: 3, group: "업무" },
   { href: "/checklists", label: "오픈·마감 점검", icon: "checklist", roles: ALL, stage: 4, group: "업무" },
   { href: "/inventory", label: "재고·발주", icon: "inventory", roles: ALL, stage: 5, group: "업무" },
   { href: "/production", label: "레시피·육수 생산", icon: "recipe", roles: MANAGERS, stage: 5, group: "업무" },
@@ -116,6 +122,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/compare", label: "지점 비교", icon: "compare", roles: ["owner", "hq_manager"], stage: 6, group: "분석" },
   { href: "/admin/stores", label: "지점 설정", icon: "store", roles: ["owner"], stage: 2, group: "관리" },
   { href: "/admin/vendors", label: "거래처 관리", icon: "vendor", roles: ["owner"], stage: 3, group: "관리" },
+  { href: "/admin/order-items", label: "발주 품목 관리", icon: "items", roles: MANAGERS, stage: 3, group: "관리" },
   { href: "/admin/users", label: "계정 관리", icon: "users", roles: ["owner"], stage: 1, group: "관리" },
   { href: "/admin/audit", label: "변경 이력", icon: "audit", roles: ["owner"], stage: 1, group: "관리" },
 ];
