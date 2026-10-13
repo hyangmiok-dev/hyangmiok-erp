@@ -76,20 +76,12 @@ flowchart LR
 
 **Secret key 사용 범위**: Auth 관리(계정 생성, 비밀번호 초기화, 로그인 차단)만. 업무 데이터 변경은 항상 사용자 세션으로 수행 → RLS 적용 + 감사로그에 실제 수행자 기록.
 
-**실제 운영 배포 (2026-10-13 변경)**: 앱은 Vercel 대신 **Netlify 무료**(대표 결정). 무료 함수 10초 제한 때문에, 오래 걸리는 거래명세표 AI 읽기만
-**Supabase Edge Function `read-statement`**(무료 150초)에서 실행한다.
+**실제 운영 배포 (2026-10-13 변경)**: 앱은 Vercel 대신 **Netlify 무료**(대표 결정, 함수 10초 제한).
 
-```mermaid
-flowchart LR
-  P[휴대폰 브라우저] -->|보관용 작은 사진| ST[(Storage 'statements'<br/>비공개 · 지점 폴더 RLS)]
-  P -->|기록 만들기 서버 액션| PG[(PostgreSQL)]
-  P -->|선명한 사진 + 사용자 JWT| EF[Edge Function<br/>read-statement]
-  EF -->|begin/finish_statement_ai<br/>사용자 권한| PG
-  EF -->|GEMINI_API_KEY| C[구글 Gemini Flash<br/>무료 등급 · JSON 출력]
-  P -->|확인 후 확정 서버 액션| PG
-```
-- AI 결과는 '제안'일 뿐: 올린 사람이 사진과 비교해 확정해야 지출(`confirm_purchase_statement`, SECURITY DEFINER — 그 명세표 1장 분량만)이 생긴다.
-- 상태 변경은 DB 함수로만(직접 UPDATE 정책 없음), AI 횟수 제한(한 장 3번 · 지점당 하루 50장)으로 비용 사고 방지.
+**입고 입력 (2026-10-13)**: 거래명세표 사진 AI 읽기(Supabase Edge Function + Claude → Gemini 무료)를 만들어 시험했으나
+오류·지연이 많아 대표 결정으로 없앴다(DB 의 `purchase_statements`·`statements` 버킷은 미사용으로 남음).
+대신 `/deliveries` 빠른 입고 입력: 지점 관리자도 입력하되 지출 표는 볼 수 없으므로, 저장·조회·취소는
+SECURITY DEFINER 함수(`record_delivery` 등)로만 하고 각 함수가 `app.can_manage_store` 를 검사한다. 금액은 DB 가 수량×단가로 계산.
 
 ---
 

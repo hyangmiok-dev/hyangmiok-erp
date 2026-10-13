@@ -14,7 +14,6 @@ import {
   recentVendors,
 } from "@/lib/data/expenses";
 import { listSales } from "@/lib/data/sales";
-import { statementIdsByExpense } from "@/lib/data/statements";
 import { summarizeItems } from "@/lib/payables";
 import { listVendors } from "@/lib/data/vendors";
 import { formatKRW, seoulDateKey } from "@/lib/format";
@@ -88,10 +87,7 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
       onCredit: v.onCredit,
       storeIds: v.storeIds,
     }));
-  const [lines, photoOf] = await Promise.all([
-    listExpenseLines([...expenses.map((e) => e.id), ...(editing ? [editing.id] : [])]),
-    statementIdsByExpense(expenses.map((e) => e.id)),
-  ]);
+  const lines = await listExpenseLines([...expenses.map((e) => e.id), ...(editing ? [editing.id] : [])]);
   const linesOf = (id: string) => lines.filter((l) => l.expenseId === id);
 
   const filtered = q
@@ -261,11 +257,6 @@ async function Expenses({ searchParams }: { searchParams: PageProps<"/expenses">
               {e.section === "excluded" && <Badge variant="secondary">제외</Badge>}
               <span className="w-28 text-right font-semibold tabular-nums">{formatKRW(e.amount)}</span>
               <span className="flex gap-1">
-                {photoOf.has(e.id) && (
-                  <Link href={`/statements/${photoOf.get(e.id)}`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-                    사진
-                  </Link>
-                )}
                 <Link href={qs({ edit: e.id })} className={buttonVariants({ variant: "ghost", size: "sm" })}>
                   수정
                 </Link>

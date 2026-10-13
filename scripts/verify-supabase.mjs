@@ -58,6 +58,9 @@ else ok(`냉장고 재고 비율 적용됨 (${reserve.map((s) => `${s.name.repla
 const { count: stCount, error: stErr } = await admin.from("purchase_statements").select("id", { count: "exact", head: true });
 if (stErr) bad(`거래명세표 사진 마이그레이션(20261013000700) 미적용: ${stErr.message}`);
 else ok(`거래명세표 사진 마이그레이션 적용됨 (기록 ${stCount ?? 0}장)`);
+const { error: dlvErr } = await admin.rpc("recent_deliveries", { p_store_id: "00000000-0000-4000-8000-000000000000" });
+if (dlvErr && /PGRST202|Could not find/i.test(`${dlvErr.code} ${dlvErr.message}`)) bad(`입고 빠른 입력 마이그레이션(20261013000800) 미적용: ${dlvErr.message}`);
+else ok("입고 빠른 입력 마이그레이션 적용됨 (DB 함수 있음)");
 const { data: bucket, error: bErr } = await admin.storage.getBucket("statements");
 if (bErr || !bucket) bad(`사진 보관함(statements 버킷) 없음: ${bErr?.message ?? ""}`);
 else if (bucket.public) bad("사진 보관함이 공개로 되어 있음! 비공개여야 함");
@@ -80,6 +83,14 @@ else bad("set_store_memberships: 비로그인 실행이 허용됨!");
 const { error: cRpcErr } = await anon.rpc("begin_statement_ai", { p_statement_id: "00000000-0000-4000-8000-000000000000" });
 if (cRpcErr) ok(`begin_statement_ai: 비로그인 실행 차단 (${cRpcErr.code ?? cRpcErr.message})`);
 else bad("begin_statement_ai: 비로그인 실행이 허용됨!");
+for (const fn of ["record_delivery", "delivery_items", "recent_deliveries", "cancel_delivery"]) {
+  const args = fn === "record_delivery"
+    ? { p_store_id: null, p_vendor_id: null, p_date: null, p_lines: [], p_vat: 0, p_on_credit: null, p_memo: null }
+    : fn === "cancel_delivery" ? { p_expense_id: null } : { p_store_id: null };
+  const { error: e } = await anon.rpc(fn, args);
+  if (e) ok(`${fn}: 비로그인 실행 차단 (${e.code ?? e.message})`);
+  else bad(`${fn}: 비로그인 실행이 허용됨!`);
+}
 const { data: anonFiles, error: anonFileErr } = await anon.storage.from("statements").list();
 if (anonFileErr || (anonFiles ?? []).length === 0) ok("사진 보관함: 비로그인 조회 차단");
 else bad("사진 보관함: 비로그인 상태에서 파일 목록이 보임!");

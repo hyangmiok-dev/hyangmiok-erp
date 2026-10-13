@@ -154,9 +154,14 @@ export async function Dashboard({ searchParams, user }: { searchParams: SP; user
                   <span className="size-3 rounded-full" style={{ background: seriesColor(c.slot) }} aria-hidden />
                   {c.store.name}
                 </h3>
-                <Link href={`/sales?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                  매출 입력
-                </Link>
+                <span className="flex gap-1">
+                  <Link href={`/deliveries?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    입고 입력
+                  </Link>
+                  <Link href={`/sales?store=${c.store.id}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    매출 입력
+                  </Link>
+                </span>
               </header>
 
               <div className="mb-4">

@@ -54,13 +54,11 @@ Next.js 16.4 (App Router, Turbopack, **Cache Components 활성**) · React 19 ·
   Cache Components 는 Cloudflare(workerd) 호환 문제로 꺼 둠 (`next.config.ts` 주석).
 - Vercel 은 무료(Hobby)가 비상업 전용이라 사용하지 않음.
 
-## Supabase Edge Function (거래명세표 AI 읽기)
-- AI 는 **구글 Gemini 무료 등급** (대표 결정 2026-10-13, 유료 Claude API 가입 대신). 무료 등급은 구글이 입력을 제품 개선에 쓸 수 있음 — 대표가 알고 선택함.
-- `supabase/functions/read-statement/` — `index.ts`(Deno 진입점, 사용자 권한), `gemini.ts`(Gemini REST 직접 호출 — SDK 는 수십 MB 라 제외), `handler.ts`(순서·검사), `schema.ts`(AI 출력 형식·지시문, Next 앱도 import), `deno.json`(npm 버전 고정). gemini/handler/schema 는 Node 테스트로 검증.
-- Netlify 무료 함수는 10초 제한 → AI 호출은 브라우저에서 Edge Function(무료 150초)으로 직접. 사용자 JWT 로 동작(RLS), 비밀값은 `GEMINI_API_KEY` 하나(aistudio.google.com 에서 대표가 만들어 대시보드 Secrets 에 입력).
-- 타입 검사: `npx deno@2.9.6 check --no-lock --config supabase/functions/read-statement/deno.json supabase/functions/read-statement/index.ts`
-- 배포(로그인 1번 필요: `npx supabase@2.118.0 login`): `npx supabase@2.118.0 functions deploy read-statement --project-ref <ref> --use-api`
-- tsconfig 는 `supabase/functions` 를 제외한다 (Deno 전용). `schema.ts`·`handler.ts` 는 앱/테스트에서 import 될 때 검사된다.
+## 입고 입력 (거래명세표)
+- 대표 결정 2026-10-13: 거래명세표 **사진 AI 읽기는 오류·지연이 많아 없앰**(Claude → Gemini 무료로 시험 후 중단). 대신 `/deliveries` 빠른 입고 입력.
+  0700 마이그레이션의 `purchase_statements`·`statements` 버킷·관련 함수는 DB 에 남아 있지만 앱에서 쓰지 않는다 (Storage 는 SQL 로 지우면 막히므로 그대로 둠). 코드는 git 기록에 있음.
+- 지점 관리자도 입고를 입력하지만 지출 표는 못 본다 → `record_delivery`·`delivery_items`·`recent_deliveries`·`cancel_delivery` (0800, SECURITY DEFINER, `app.can_manage_store` 검사, 금액은 DB 가 수량×단가로 계산).
+- Supabase CLI 는 로그인되어 있음(`npx supabase@2.118.0 ...`, 이 셸의 PowerShell 은 `npx` 대신 `npx.cmd` 가 필요할 수 있음 — 실행 정책). Edge Function 은 현재 없음.
 ## 폴더
 - `src/app/(app)/` 로그인 후 화면, `src/app/login/` 로그인
 - `src/lib/auth/` 권한 규칙·DAL, `src/lib/data/` 조회(server-only), `src/lib/validation/` Zod
