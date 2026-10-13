@@ -1,7 +1,7 @@
 /**
  * 발주 · 입고 확인 (순수 함수) — 대표 결정 2026-10-13: 구글폼 발주판을 앱으로.
  * 저녁: 체크(평소 수량) → [발주 완료] → 밤 9시 텔레그램 (9시 이후 발주는 다음 날로)
- * 아침: 줄마다 같음/다름/안 옴 → 모든 줄 확인 + 영수증 합계 비교 → [입고 완료]
+ * 아침: 품목마다 왔음/안 옴 체크 → 모든 품목 체크 + 거래처 총금액만 입력 → [입고 완료] (금액은 미수로 쌓임)
  */
 import { lineAmount } from "@/lib/payables";
 import { addDays, type DateKey } from "@/lib/period";
@@ -77,81 +77,37 @@ export function orderEstimate(selected: { qty: number; unitPrice: number | null 
 }
 
 // ---------------------------------------------------------------------
-// 아침 입고 확인
+// 아침 입고 확인: 품목 체크(왔음/안 옴) + 거래처 총금액 (대표 결정 2026-10-13)
 // ---------------------------------------------------------------------
 
-export type CheckStatus = "ok" | "changed" | "missing";
+export type CheckStatus = "ok" | "missing";
 
 export interface ReceiveLine {
   lineId: string;
   itemName: string;
   unit: string | null;
   orderedQty: number;
-  /** 발주 때 단가 (모르면 null) */
-  price: number | null;
   status: CheckStatus | null;
-  /** '다름'일 때 실제 받은 수량·단가 (문자열 입력) */
-  qty: string;
-  newPrice: string;
-}
-
-export function receivedQty(l: ReceiveLine): number {
-  if (l.status === "missing") return 0;
-  if (l.status === "changed") return Number(l.qty) || 0;
-  return l.orderedQty;
-}
-
-export function receivedPrice(l: ReceiveLine): number | null {
-  if (l.status === "changed") return l.newPrice === "" ? null : Number(l.newPrice);
-  return l.price;
-}
-
-export function receiveLineAmount(l: ReceiveLine): number {
-  const p = receivedPrice(l);
-  const q = receivedQty(l);
-  if (p === null || q <= 0) return 0;
-  return lineAmount(q, p);
-}
-
-export function receiptTotal(lines: ReceiveLine[], vat: number): number {
-  return lines.reduce((n, l) => n + receiveLineAmount(l), 0) + (vat > 0 ? vat : 0);
 }
 
 /** 완료 전 남은 일 (빈 배열이면 완료 가능) */
-export function receiveProblems(lines: ReceiveLine[]): string[] {
+export function receiveProblems(lines: ReceiveLine[], amount: string, vendorChosen: boolean): string[] {
   const out: string[] = [];
+  if (!vendorChosen) out.push("거래처를 골라 주세요.");
   const unchecked = lines.filter((l) => l.status === null).length;
-  if (unchecked) out.push(`아직 확인하지 않은 품목이 ${unchecked}개 있어요.`);
-  for (const l of lines) {
-    if (l.status === "changed") {
-      if (!(Number(l.qty) >= 0) || l.qty === "") out.push(`'${l.itemName}' 받은 수량을 적어 주세요.`);
-      if (l.newPrice === "") out.push(`'${l.itemName}' 단가를 적어 주세요.`);
-    }
-    if (l.status === "ok" && l.price === null) out.push(`'${l.itemName}'은 단가를 몰라요. [다름]을 눌러 영수증 단가를 적어 주세요.`);
-  }
+  if (unchecked) out.push(`아직 체크하지 않은 품목이 ${unchecked}개 있어요.`);
+  const received = lines.some((l) => l.status === "ok");
+  const n = amount === "" ? null : Number(amount);
+  if (received && !(n !== null && n > 0)) out.push("거래명세표 총금액을 적어 주세요.");
+  if (!received && !unchecked && n !== null && n > 0) out.push("모두 안 왔는데 금액이 있어요. 다시 확인해 주세요.");
   return out;
 }
 
-/** 단가·수량이 발주와 달라진 줄 (화면 표시용) */
-export function lineChanges(l: ReceiveLine): { priceChanged: boolean; qtyChanged: boolean } {
-  if (l.status !== "changed") return { priceChanged: false, qtyChanged: false };
-  return {
-    priceChanged: l.newPrice !== "" && Number(l.newPrice) !== l.price,
-    qtyChanged: l.qty !== "" && Number(l.qty) !== l.orderedQty,
-  };
+export function toCompleteLines(lines: ReceiveLine[]): { line_id: string; status: CheckStatus }[] {
+  return lines.map((l) => ({ line_id: l.lineId, status: l.status ?? "ok" }));
 }
 
-export type CompleteLine =
-  | { line_id: string; status: "ok" }
-  | { line_id: string; status: "missing" }
-  | { line_id: string; status: "changed"; qty: string; price: string };
-
-export function toCompleteLines(lines: ReceiveLine[]): CompleteLine[] {
-  return lines.map((l): CompleteLine =>
-    l.status === "changed"
-      ? { line_id: l.lineId, status: "changed", qty: l.qty, price: l.newPrice }
-      : l.status === "missing"
-        ? { line_id: l.lineId, status: "missing" }
-        : { line_id: l.lineId, status: "ok" },
-  );
+/** [모두 왔음] */
+export function checkAll(lines: ReceiveLine[]): ReceiveLine[] {
+  return lines.map((l) => ({ ...l, status: l.status ?? "ok" }));
 }

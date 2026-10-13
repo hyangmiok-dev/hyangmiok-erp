@@ -52,38 +52,21 @@ export async function saveOrderAction(input: z.input<typeof saveOrderSchema>): P
   };
 }
 
-const priceStr = z.string().trim().regex(/^\d{1,9}$/, "단가를 숫자로 적어 주세요.");
 const completeSchema = z.object({
   orderId: z.uuid(),
   vendorId: z.uuid({ message: "거래처를 골라 주세요." }),
   lines: z
-    .array(
-      z.discriminatedUnion("status", [
-        z.object({ line_id: z.uuid(), status: z.literal("ok") }),
-        z.object({ line_id: z.uuid(), status: z.literal("missing") }),
-        z.object({
-          line_id: z.uuid(),
-          status: z.literal("changed"),
-          qty: z.string().trim().regex(/^\d{1,7}(\.\d{1,3})?$/, "받은 수량을 숫자로 적어 주세요."),
-          price: priceStr,
-        }),
-      ]),
-    )
+    .array(z.object({ line_id: z.uuid(), status: z.enum(["ok", "missing"]) }))
     .min(1, "확인할 품목이 없습니다."),
-  vat: z
+  amount: z
     .string()
-    .trim()
-    .refine((v) => v === "" || /^\d{1,9}$/.test(v), "부가세는 숫자로 적어 주세요.")
-    .transform((v) => (v === "" ? 0 : Number(v))),
-  receiptTotal: z
-    .string()
-    .trim()
-    .refine((v) => v === "" || /^\d{1,10}$/.test(v), "영수증 합계는 숫자로 적어 주세요.")
-    .transform((v) => (v === "" ? null : Number(v))),
+    .transform((v) => v.replace(/[,\s원]/g, ""))
+    .refine((v) => /^\d{1,10}$/.test(v), "거래명세표 총금액을 숫자로 적어 주세요.")
+    .transform(Number),
   memo: z.string().trim().max(200, "메모는 200자 이하로 적어 주세요."),
 });
 
-/** [입고 완료] — DB 함수 complete_receipt 가 모든 줄 확인·합계·권한을 다시 검사하고 지출을 만든다 */
+/** [입고 완료] — DB 함수 complete_receipt 가 모든 품목 체크·금액·권한을 다시 검사하고 그 금액으로 지출(미수)을 만든다 */
 export async function completeReceiptAction(input: z.input<typeof completeSchema>): Promise<ActionResult> {
   const auth = await authorizeAction(ALL);
   if (!auth.ok) return { ok: false, message: auth.message };
@@ -96,8 +79,7 @@ export async function completeReceiptAction(input: z.input<typeof completeSchema
     p_order_id: v.orderId,
     p_vendor_id: v.vendorId,
     p_lines: v.lines,
-    p_vat: v.vat,
-    p_receipt_total: v.receiptTotal,
+    p_amount: v.amount,
     p_memo: v.memo || null,
   });
   if (error) return { ok: false, message: dbMessage(error.message) };
@@ -106,7 +88,7 @@ export async function completeReceiptAction(input: z.input<typeof completeSchema
   revalidatePath("/payables", "layout");
   revalidatePath("/expenses");
   revalidatePath("/");
-  return { ok: true, message: `입고 완료! ${v.receiptTotal !== null ? formatKRW(v.receiptTotal) : ""}`.trim() };
+  return { ok: true, message: v.amount > 0 ? `입고 완료! ${formatKRW(v.amount)}` : "입고 완료! (안 온 것으로 기록)" };
 }
 
 /** 대표: 텔레그램 연결 시험 */

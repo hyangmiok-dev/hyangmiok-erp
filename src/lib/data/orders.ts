@@ -96,13 +96,7 @@ export interface ReceiveGroup {
   orderDate: string;
   vendorId: string | null;
   vendorName: string;
-  lines: {
-    lineId: string;
-    itemName: string;
-    unit: string | null;
-    qty: number;
-    price: number | null;
-  }[];
+  lines: { lineId: string; itemName: string; unit: string | null; qty: number }[];
 }
 
 /** 입고 확인할 것: 최근 7일, 보냈거나(또는 지난 날 완료) 아직 확인 안 한 거래처별 묶음 */
@@ -112,7 +106,7 @@ export async function listReceivable(storeId: string): Promise<ReceiveGroup[]> {
   const { data, error } = await supabase
     .from("orders")
     .select(
-      "id, order_date, status, order_lines(id, qty, unit_price, received_at, order_items(name, unit, unit_price, vendor_id, sort_order, vendors(name))), order_receipts(vendor_id)",
+      "id, order_date, status, order_lines(id, qty, received_at, order_items(name, unit, vendor_id, sort_order, vendors(name))), order_receipts(vendor_id)",
     )
     .eq("store_id", storeId)
     .gte("order_date", addDays(today, -7))
@@ -127,16 +121,8 @@ export async function listReceivable(storeId: string): Promise<ReceiveGroup[]> {
     order_lines: {
       id: string;
       qty: number | string;
-      unit_price: number | string | null;
       received_at: string | null;
-      order_items: {
-        name: string;
-        unit: string | null;
-        unit_price: number | string | null;
-        vendor_id: string | null;
-        sort_order: number;
-        vendors: { name: string } | null;
-      };
+      order_items: { name: string; unit: string | null; vendor_id: string | null; sort_order: number; vendors: { name: string } | null };
     }[];
     order_receipts: { vendor_id: string }[];
   };
@@ -159,14 +145,7 @@ export async function listReceivable(storeId: string): Promise<ReceiveGroup[]> {
         vendorName: vid ? (l.order_items.vendors?.name ?? "거래처") : "거래처 미정",
         lines: [],
       };
-      const price = l.unit_price ?? l.order_items.unit_price;
-      g.lines.push({
-        lineId: l.id,
-        itemName: l.order_items.name,
-        unit: l.order_items.unit,
-        qty: Number(l.qty),
-        price: price === null ? null : Number(price),
-      });
+      g.lines.push({ lineId: l.id, itemName: l.order_items.name, unit: l.order_items.unit, qty: Number(l.qty) });
       byVendor.set(key, g);
     }
     groups.push(...byVendor.values());
@@ -178,8 +157,8 @@ export interface DoneReceipt {
   id: string;
   orderDate: string;
   vendorName: string;
-  total: number;
-  receiptTotal: number | null;
+  amount: number;
+  missingCount: number;
   memo: string | null;
   completedAt: string;
   completedByName: string | null;
@@ -190,15 +169,15 @@ export async function listDoneReceipts(storeId: string): Promise<DoneReceipt[]> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("order_receipts")
-    .select("id, computed_total, receipt_total, memo, completed_at, vendors(name), orders(order_date), completer:profiles!order_receipts_completed_by_fkey(full_name)")
+    .select("id, amount, missing_count, memo, completed_at, vendors(name), orders(order_date), completer:profiles!order_receipts_completed_by_fkey(full_name)")
     .eq("store_id", storeId)
     .gte("completed_at", new Date(Date.now() - 3 * 86_400_000).toISOString())
     .order("completed_at", { ascending: false });
   if (error) throw new Error(`입고 기록 조회 실패: ${error.message}`);
   return ((data ?? []) as unknown as {
     id: string;
-    computed_total: number | string;
-    receipt_total: number | string | null;
+    amount: number | string;
+    missing_count: number;
     memo: string | null;
     completed_at: string;
     vendors: { name: string } | null;
@@ -208,14 +187,13 @@ export async function listDoneReceipts(storeId: string): Promise<DoneReceipt[]> 
     id: r.id,
     orderDate: r.orders?.order_date ?? "",
     vendorName: r.vendors?.name ?? "거래처",
-    total: Number(r.computed_total),
-    receiptTotal: r.receipt_total === null ? null : Number(r.receipt_total),
+    amount: Number(r.amount),
+    missingCount: r.missing_count,
     memo: r.memo,
     completedAt: r.completed_at,
     completedByName: r.completer?.full_name ?? null,
   }));
 }
-
 /** 거래 중인 거래처 (거래처 미정 품목 입고 때 고르기용) */
 export async function activeVendors(): Promise<{ id: string; name: string }[]> {
   const supabase = await createClient();

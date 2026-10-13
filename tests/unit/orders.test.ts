@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  checkAll,
   groupByCategory,
-  lineChanges,
   orderDay,
   orderEstimate,
   qtyLabel,
-  receiptTotal,
   receiveProblems,
   stepDown,
   stepUp,
@@ -52,56 +51,42 @@ describe("발주", () => {
   });
 });
 
-describe("아침 입고 확인", () => {
-  const base = (over: Partial<ReceiveLine> = {}): ReceiveLine => ({
+describe("아침 입고 확인 (품목 체크 + 총금액)", () => {
+  const line = (over: Partial<ReceiveLine> = {}): ReceiveLine => ({
     lineId: "l1",
     itemName: "숙주",
     unit: "박스",
     orderedQty: 5,
-    price: 15000,
     status: null,
-    qty: "5",
-    newPrice: "15000",
     ...over,
   });
 
-  it("확인 안 한 줄이 있으면 완료 불가", () => {
-    expect(receiveProblems([base(), base({ lineId: "l2", status: "ok" })])).toEqual(["아직 확인하지 않은 품목이 1개 있어요."]);
-    expect(receiveProblems([base({ status: "ok" })])).toEqual([]);
+  it("체크 안 한 품목·총금액이 없으면 완료 불가", () => {
+    expect(receiveProblems([line(), line({ lineId: "l2", status: "ok" })], "", true)).toEqual([
+      "아직 체크하지 않은 품목이 1개 있어요.",
+      "거래명세표 총금액을 적어 주세요.",
+    ]);
+    expect(receiveProblems([line({ status: "ok" })], "75000", true)).toEqual([]);
   });
 
-  it("단가 모르는 품목은 [같음] 불가, [다름]에서 단가를 적어야 한다", () => {
-    expect(receiveProblems([base({ status: "ok", price: null })])[0]).toContain("단가를 몰라요");
-    expect(receiveProblems([base({ status: "changed", price: null, newPrice: "" })])[0]).toContain("단가를 적어");
+  it("거래처 미정이면 거래처를 골라야 한다", () => {
+    expect(receiveProblems([line({ status: "ok" })], "1000", false)[0]).toBe("거래처를 골라 주세요.");
   });
 
-  it("합계: 같음=발주대로, 다름=적은 수량×단가, 안 옴=0, 부가세 더하기", () => {
-    const lines = [
-      base({ status: "ok" }), // 75,000
-      base({ lineId: "l2", itemName: "차돌양지", orderedQty: 2, price: 32000, status: "changed", qty: "2", newPrice: "33000" }), // 66,000
-      base({ lineId: "l3", itemName: "고수", orderedQty: 2, price: 3000, status: "missing" }), // 0
-    ];
-    expect(receiptTotal(lines, 0)).toBe(141000);
-    expect(receiptTotal(lines, 5000)).toBe(146000);
+  it("모두 안 왔으면 금액 없이 완료, 금액을 적으면 확인 요청", () => {
+    expect(receiveProblems([line({ status: "missing" })], "", true)).toEqual([]);
+    expect(receiveProblems([line({ status: "missing" })], "5000", true)[0]).toContain("모두 안 왔는데");
   });
 
-  it("바뀐 것 표시: 단가 ▲, 수량 다름", () => {
-    expect(lineChanges(base({ status: "changed", newPrice: "16000" }))).toEqual({ priceChanged: true, qtyChanged: false });
-    expect(lineChanges(base({ status: "changed", qty: "4" }))).toEqual({ priceChanged: false, qtyChanged: true });
-    expect(lineChanges(base({ status: "ok" }))).toEqual({ priceChanged: false, qtyChanged: false });
+  it("[모두 왔음]은 체크 안 한 품목만 왔음으로, 이미 '안 옴'은 그대로", () => {
+    const r = checkAll([line(), line({ lineId: "l2", status: "missing" })]);
+    expect(r.map((x) => x.status)).toEqual(["ok", "missing"]);
   });
 
-  it("서버로 보낼 줄: 다름만 수량·단가를 같이 보낸다", () => {
-    expect(
-      toCompleteLines([
-        base({ status: "ok" }),
-        base({ lineId: "l2", status: "changed", qty: "4", newPrice: "16000" }),
-        base({ lineId: "l3", status: "missing" }),
-      ]),
-    ).toEqual([
+  it("서버로 보낼 줄", () => {
+    expect(toCompleteLines([line({ status: "ok" }), line({ lineId: "l2", status: "missing" })])).toEqual([
       { line_id: "l1", status: "ok" },
-      { line_id: "l2", status: "changed", qty: "4", price: "16000" },
-      { line_id: "l3", status: "missing" },
+      { line_id: "l2", status: "missing" },
     ]);
   });
 });

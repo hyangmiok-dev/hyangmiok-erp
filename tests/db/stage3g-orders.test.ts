@@ -216,136 +216,154 @@ describe("밤 9시 텔레그램", () => {
   });
 });
 
-describe("아침 입고 확인", () => {
+describe("아침 입고 확인 (품목 체크 + 거래처 총금액)", () => {
   let orderId: string;
   let lines: { id: string; name: string }[];
   let mni: string;
+  let gh: string;
 
   const complete = (
     uid: string,
     vendor: string,
-    ls: { line_id: string; status: string; qty?: string | number; price?: string | number }[],
-    opts: { vat?: number; total?: number | null; memo?: string | null; order?: string } = {},
+    ls: { line_id: string; status: string }[],
+    amount: number | null,
+    opts: { memo?: string | null; order?: string } = {},
   ) =>
     asUser(db, uid, (tx) =>
-      tx.query<{ id: string }>(`select public.complete_receipt($1, $2, $3::jsonb, $4, $5, $6) as id`, [
+      tx.query<{ id: string }>(`select public.complete_receipt($1, $2, $3::jsonb, $4, $5) as id`, [
         opts.order ?? orderId,
         vendor,
         JSON.stringify(ls),
-        opts.vat ?? 0,
-        opts.total ?? null,
+        amount,
         opts.memo ?? null,
       ]),
     );
 
-  beforeAll(async () => {
-    orderId = (
-      await db.query<{ id: string }>(`select id from public.orders where store_id = $1 and status = 'sent'`, [s1])
+  /** 지난 날짜로 보낸 발주를 만든다 (시험용) */
+  async function pastOrder(store: string, names: string[], daysAgo: number) {
+    const o = (
+      await db.query<{ id: string }>(
+        `insert into public.orders (store_id, order_date, status) values ($1, app.seoul_today() - $2::int, 'sent') returning id`,
+        [store, daysAgo],
+      )
     ).rows[0].id;
+    const ids: Record<string, string> = {};
+    for (const n of names) {
+      const it = await item(store, n);
+      ids[n] = (
+        await db.query<{ id: string }>(`insert into public.order_lines (order_id, item_id, qty) values ($1, $2, 1) returning id`, [o, it.id])
+      ).rows[0].id;
+    }
+    return { orderId: o, lineIds: ids };
+  }
+
+  beforeAll(async () => {
+    orderId = (await db.query<{ id: string }>(`select id from public.orders where store_id = $1 and status = 'sent'`, [s1])).rows[0].id;
     lines = await linesOf(orderId);
     mni = await vendorId("엠앤아이");
-    // 차돌양지 단가: 32,000 (점장이 품목표에 미리 입력)
-    await asUser(db, MGR1, (tx) => tx.query(`update public.order_items set unit_price = 32000 where store_id = $1 and name = '차돌양지'`, [s1]));
-    await db.query(`update public.order_lines set unit_price = 32000 where id = $1`, [lines.find((l) => l.name === "차돌양지")!.id]);
+    gh = await vendorId("경희상회");
   });
 
-  it("거래처 줄을 다 체크하지 않으면 완료 안 됨", async () => {
+  it("거래처가 다른 품목을 섞거나, 같은 거래처 품목을 다 체크하지 않으면 완료 안 됨", async () => {
     const daepa = lines.find((l) => l.name === "대파채")!;
-    // 엠앤아이 줄(차돌양지)을 빼고 경희상회 줄만 보내면 엠앤아이로는 완료 불가
-    await expect(complete(STAFF1, mni, [{ line_id: daepa.id, status: "missing" }])).rejects.toThrow(/올바르지 않습니다/);
-  });
-
-  it("단가를 모르는 품목을 '같음'으로 하면 거부 → '다름'으로 단가를 적어야 한다", async () => {
-    const daepa = lines.find((l) => l.name === "대파채")!;
-    const gh = await vendorId("경희상회");
-    await expect(complete(STAFF1, gh, [{ line_id: daepa.id, status: "ok" }])).rejects.toThrow(/단가 모르는 품목/);
-  });
-
-  it("영수증 합계가 다르면 이유 없이는 완료 안 됨", async () => {
-    const chadol = lines.find((l) => l.name === "차돌양지")!;
-    await expect(complete(STAFF1, mni, [{ line_id: chadol.id, status: "changed", qty: 2, price: 33000 }], { total: 60000 })).rejects.toThrow(
-      /다릅니다/,
+    await expect(complete(STAFF1, mni, [{ line_id: daepa.id, status: "ok" }], 1000)).rejects.toThrow(/올바르지 않습니다/);
+    const p = await pastOrder(s1, ["숙주", "고수"], 1); // 둘 다 경희상회
+    await expect(complete(STAFF1, gh, [{ line_id: p.lineIds["숙주"], status: "ok" }], 75000, { order: p.orderId })).rejects.toThrow(
+      /체크하지 않은 품목이 1개/,
     );
   });
 
-  it("직원이 단가 변경을 확인하고 완료 → 지출(외상)+품목 줄, 품목표 단가 갱신, 변동 기록", async () => {
+  it("받은 게 있는데 금액이 0이거나, 하나도 안 왔는데 금액이 있으면 거부", async () => {
     const chadol = lines.find((l) => l.name === "차돌양지")!;
-    const r = await complete(STAFF1, mni, [{ line_id: chadol.id, status: "changed", qty: 2, price: 33000 }], { total: 66000, vat: 0 });
-    expect(r.rows[0].id).toBeTruthy();
+    await expect(complete(STAFF1, mni, [{ line_id: chadol.id, status: "ok" }], 0)).rejects.toThrow(/총금액을 적어/);
+    await expect(complete(STAFF1, mni, [{ line_id: chadol.id, status: "ok" }], null)).rejects.toThrow(/총금액을 적어/);
+    await expect(complete(STAFF1, mni, [{ line_id: chadol.id, status: "missing" }], 5000)).rejects.toThrow(/안 왔는데 금액/);
+  });
 
-    const rc = await db.query<{ computed_total: number; expense_id: string; completed_by: string }>(
-      `select computed_total::int, expense_id, completed_by from public.order_receipts where id = $1`,
+  it("직원이 체크하고 총금액만 넣으면 → 그 금액으로 식재료 지출(외상 → 미수)", async () => {
+    const chadol = lines.find((l) => l.name === "차돌양지")!;
+    const r = await complete(STAFF1, mni, [{ line_id: chadol.id, status: "ok" }], 66000);
+    const rc = await db.query<{ amount: number; missing_count: number; expense_id: string; completed_by: string }>(
+      `select amount::int, missing_count, expense_id, completed_by from public.order_receipts where id = $1`,
       [r.rows[0].id],
     );
-    expect(rc.rows[0]).toMatchObject({ computed_total: 66000, completed_by: STAFF1 });
-    const e = await db.query<{ amount: number; on_credit: boolean; vendor_id: string; created_by: string }>(
-      `select amount::int, on_credit, vendor_id, created_by from public.expenses where id = $1`,
+    expect(rc.rows[0]).toMatchObject({ amount: 66000, missing_count: 0, completed_by: STAFF1 });
+    const e = await db.query<{ amount: number; on_credit: boolean; vendor_id: string; created_by: string; description: string; code: string }>(
+      `select e.amount::int, e.on_credit, e.vendor_id, e.created_by, e.description, c.code
+       from public.expenses e join public.expense_categories c on c.id = e.category_id where e.id = $1`,
       [rc.rows[0].expense_id],
     );
-    expect(e.rows[0]).toEqual({ amount: 66000, on_credit: true, vendor_id: mni, created_by: STAFF1 });
-    const el = await db.query<{ item_name: string; quantity: string; unit_price: number }>(
-      `select item_name, quantity::text, unit_price::int from public.expense_lines where expense_id = $1`,
-      [rc.rows[0].expense_id],
-    );
-    expect(el.rows.map((x) => [x.item_name, Number(x.quantity), x.unit_price])).toEqual([["차돌양지", 2, 33000]]);
-
-    expect((await item(s1, "차돌양지")).unit_price).toBe(33000);
-    const pc = await db.query<{ old_price: number; new_price: number; source: string; changed_by: string }>(
-      `select old_price::int, new_price::int, source, changed_by from public.order_price_changes
-       where item_id = (select id from public.order_items where store_id = $1 and name = '차돌양지') order by id desc limit 1`,
-      [s1],
-    );
-    expect(pc.rows[0]).toEqual({ old_price: 32000, new_price: 33000, source: "receive", changed_by: STAFF1 });
+    expect(e.rows[0]).toMatchObject({ amount: 66000, on_credit: true, vendor_id: mni, created_by: STAFF1, code: "food" });
+    expect(e.rows[0].description).toContain("차돌양지2박스");
+    const l = await db.query<{ recv_status: string }>(`select recv_status from public.order_lines where id = $1`, [chadol.id]);
+    expect(l.rows[0].recv_status).toBe("ok");
   });
 
   it("같은 거래처를 두 번 완료할 수 없다", async () => {
     const chadol = lines.find((l) => l.name === "차돌양지")!;
-    await expect(complete(STAFF1, mni, [{ line_id: chadol.id, status: "ok" }])).rejects.toThrow(/이미 확인했습니다/);
+    await expect(complete(STAFF1, mni, [{ line_id: chadol.id, status: "ok" }], 66000)).rejects.toThrow(/이미 확인했습니다/);
   });
 
-  it("안 온 것만 있으면 지출 없이 확인 기록만", async () => {
+  it("하나도 안 왔으면 0원 → 지출 없이 확인 기록만 (안 온 개수 기록)", async () => {
     const daepa = lines.find((l) => l.name === "대파채")!;
-    const gh = await vendorId("경희상회");
-    const r = await complete(MGR1, gh, [{ line_id: daepa.id, status: "missing" }]);
-    const rc = await db.query<{ computed_total: number; expense_id: string | null }>(
-      `select computed_total::int, expense_id from public.order_receipts where id = $1`,
+    const r = await complete(MGR1, gh, [{ line_id: daepa.id, status: "missing" }], 0);
+    const rc = await db.query<{ amount: number; missing_count: number; expense_id: string | null }>(
+      `select amount::int, missing_count, expense_id from public.order_receipts where id = $1`,
       [r.rows[0].id],
     );
-    expect(rc.rows[0]).toEqual({ computed_total: 0, expense_id: null });
+    expect(rc.rows[0]).toEqual({ amount: 0, missing_count: 1, expense_id: null });
+  });
+
+  it("일부만 오면 받은 것만 요약에, 안 온 개수도 지출 내용에 남는다", async () => {
+    const p = await pastOrder(s1, ["숙주", "고수", "청로메인"], 2);
+    const r = await complete(
+      STAFF1,
+      gh,
+      [
+        { line_id: p.lineIds["숙주"], status: "ok" },
+        { line_id: p.lineIds["고수"], status: "missing" },
+        { line_id: p.lineIds["청로메인"], status: "ok" },
+      ],
+      27000,
+      { order: p.orderId },
+    );
+    const e = await db.query<{ description: string }>(
+      `select e.description from public.expenses e join public.order_receipts r on r.expense_id = e.id where r.id = $1`,
+      [r.rows[0].id],
+    );
+    expect(e.rows[0].description).toContain("숙주1박스");
+    expect(e.rows[0].description).toContain("청로메인1키로");
+    expect(e.rows[0].description).not.toContain("고수");
+    expect(e.rows[0].description).toContain("안 옴 1개");
   });
 
   it("다른 지점 직원은 입고 확인 불가, 직원은 지출 표를 못 본다", async () => {
     const o2 = (await db.query<{ id: string }>(`select id from public.orders where store_id = $1 and status = 'sent'`, [s2])).rows[0].id;
     const l2 = await linesOf(o2);
     await expect(
-      complete(STAFF1, mni, [{ line_id: l2.find((l) => l.name === "한우사골")!.id, status: "changed", qty: 20, price: 9000 }], { order: o2 }),
+      complete(STAFF1, mni, [{ line_id: l2.find((l) => l.name === "한우사골")!.id, status: "ok" }], 180000, { order: o2 }),
     ).rejects.toThrow(/권한이 없습니다/);
     const e = await asUser(db, STAFF1, (tx) => tx.query(`select * from public.expenses`));
     expect(e.rows).toHaveLength(0);
   });
 
   it("거래처 미정 품목은 입고 때 고른 거래처로 기억된다", async () => {
-    // 2호점 내일 발주: 현미유(미정) → 보낸 것으로 만들고 입고 확인
-    const hyunmi = await item(s2, "현미유");
-    const o = (await db.query<{ id: string }>(
-      `insert into public.orders (store_id, order_date, status) values ($1, app.seoul_today() - 1, 'submitted') returning id`,
-      [s2],
-    )).rows[0].id;
-    const line = (await db.query<{ id: string }>(
-      `insert into public.order_lines (order_id, item_id, qty) values ($1, $2, 1) returning id`,
-      [o, hyunmi.id],
-    )).rows[0].id;
+    const p = await pastOrder(s2, ["현미유"], 1);
     const cnf = await vendorId("씨앤푸드");
-    await complete(STAFF2, cnf, [{ line_id: line, status: "changed", qty: 1, price: 45000 }], { order: o });
+    await complete(STAFF2, cnf, [{ line_id: p.lineIds["현미유"], status: "ok" }], 45000, { order: p.orderId });
     expect((await item(s2, "현미유")).vendor_id).toBe(cnf);
-    expect((await item(s2, "현미유")).unit_price).toBe(45000);
   });
 
-  it("아직 보내지 않은 오늘 발주는 입고 확인 불가", async () => {
-    const today = (await db.query<{ id: string }>(
-      `insert into public.orders (store_id, order_date, status) values ($1, app.seoul_today() + 5, 'submitted') returning id`,
-      [s1],
-    )).rows[0].id;
-    await expect(complete(STAFF1, mni, [{ line_id: lines[0].id, status: "ok" }], { order: today })).rejects.toThrow(/아직 보내지 않은/);
+  it("아직 보내지 않은 발주는 입고 확인 불가", async () => {
+    const future = (
+      await db.query<{ id: string }>(
+        `insert into public.orders (store_id, order_date, status) values ($1, app.seoul_today() + 5, 'submitted') returning id`,
+        [s1],
+      )
+    ).rows[0].id;
+    await expect(complete(STAFF1, mni, [{ line_id: lines[0].id, status: "ok" }], 1000, { order: future })).rejects.toThrow(
+      /아직 보내지 않은/,
+    );
   });
 });
+

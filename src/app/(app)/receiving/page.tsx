@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth/dal";
 import { canAccessStore } from "@/lib/auth/roles";
 import { listAccessibleStores } from "@/lib/data/stores";
 import { activeVendors, listDoneReceipts, listReceivable } from "@/lib/data/orders";
-import { formatDateTimeKo, formatKRW } from "@/lib/format";
+import { formatDateTimeKo, formatKRW, seoulDateKey } from "@/lib/format";
 import { shortDateKo } from "@/lib/period";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, LoadingState } from "@/components/states";
@@ -32,12 +32,14 @@ async function Receiving({ searchParams }: { searchParams: PageProps<"/receiving
   const store = stores.find((s) => s.id === first(sp.store)) ?? stores[0];
 
   const [groups, done, vendors] = await Promise.all([listReceivable(store.id), listDoneReceipts(store.id), activeVendors()]);
+  const today = seoulDateKey();
+  const todayTotal = done.filter((d) => seoulDateKey(new Date(d.completedAt)) === today).reduce((n, d) => n + d.amount, 0);
 
   return (
     <div className="mx-auto max-w-2xl pb-10">
       <PageHeader
         title="입고 확인"
-        description="종이 거래명세표를 보면서 줄마다 '금액'만 비교하세요. 같으면 [같음], 다르면 [다름]을 눌러 종이에 적힌 수량·단가를 적어요."
+        description="거래처별로 품목을 [왔음]/[안 옴] 체크하고, 거래명세표 맨 아래 총금액만 적어 [입고 완료]. 금액은 거래처 미수로 쌓여요."
       />
 
       {stores.length > 1 && (
@@ -68,8 +70,9 @@ async function Receiving({ searchParams }: { searchParams: PageProps<"/receiving
       )}
 
       <section aria-labelledby="done-h" className="mt-10">
-        <h2 id="done-h" className="mb-2 text-sm font-semibold text-muted-foreground">
-          최근 입고 완료 (3일)
+        <h2 id="done-h" className="mb-2 flex items-baseline justify-between text-sm font-semibold text-muted-foreground">
+          <span>최근 입고 완료 (3일)</span>
+          {todayTotal > 0 && <span className="text-base text-foreground tabular-nums">오늘 입고 합계 {formatKRW(todayTotal)}</span>}
         </h2>
         {done.length === 0 ? (
           <EmptyState title="최근 완료한 입고가 없어요" />
@@ -87,10 +90,8 @@ async function Receiving({ searchParams }: { searchParams: PageProps<"/receiving
                   </p>
                 </div>
                 <span className="text-right font-semibold tabular-nums">
-                  {formatKRW(d.total)}
-                  {d.receiptTotal !== null && d.receiptTotal !== d.total && (
-                    <span className="block text-[11px] font-normal text-amber-700">영수증 {formatKRW(d.receiptTotal)}</span>
-                  )}
+                  {formatKRW(d.amount)}
+                  {d.missingCount > 0 && <span className="block text-[11px] font-normal text-amber-700">안 옴 {d.missingCount}개</span>}
                 </span>
               </li>
             ))}

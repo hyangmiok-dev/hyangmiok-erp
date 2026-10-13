@@ -4,9 +4,10 @@
 -- 대표 결정 (2026-10-13)
 --  * 품목표: 지점별 구글폼(1호점·2호점 발주판)의 품목을 거래처별로 정리. 3호점은 2호점과 같게 시작
 --  * 저녁: 직원·점장이 발주표에서 체크 → [발주 완료] → 밤 9시(한국)에 텔레그램으로 분류별 전송
---  * 아침: 어제 발주와 종이 거래명세표를 줄마다 비교(같음/다름/안 옴) → 모든 줄 확인해야 [입고 완료]
---    → 식재료 지출(+품목 줄) 자동 생성, 외상이면 거래처 미수
---  * 직원도 단가·금액을 보고, 다르면 누구나 고칠 수 있다. 바뀐 단가는 품목표에 저장 + 밤 9시에 대표에게 알림
+--  * 아침: 어제 발주를 종이 거래명세표와 품목마다 체크(왔음/안 옴) → 모든 품목 체크 + 거래처 '총금액'만 입력 → [입고 완료]
+--    → 그 금액으로 식재료 지출 자동 생성, 외상이면 거래처 미수에 쌓임 → 쌓인 매입으로 매출 대비 원가율
+--    (대표 결정 2026-10-13: 줄마다 단가를 맞추지 않고 거래처 총금액만 — 일일정산 앱처럼)
+--  * 품목표 단가는 선택(발주표 예상 금액용). 품목표에서 단가를 고치면 밤 9시에 대표에게 알림
 --  * 분류 → 거래처: 고기 엠앤아이, 야채 경희상회, 면 투웰브, 식자재 씨앤푸드, 방앗간 개풍, 포장용기 이미진포장(이곡농산에서 이름 변경),
 --    음료 청수상사, 마트 참사랑마트, 쿠팡 쿠팡, 네이버 네이버, 주류 타래주류,
 --    택배주문은 품목별(깍두기 예길식품, 이북식만두 피플블라썸, 두태기름 엠앤아이, 나머지 거래처 미정)
@@ -40,7 +41,7 @@ create table public.order_items (
 
 create index order_items_store_idx on public.order_items (store_id, sort_order);
 
-comment on table public.order_items is '발주 품목표(지점별). unit_price 는 현재 단가 — 입고 확인 때 바뀌면 자동 갱신(order_price_changes 에 기록)';
+comment on table public.order_items is '발주 품목표(지점별). unit_price 는 참고용 단가(발주표 예상 금액) — 고치면 order_price_changes 에 기록';
 comment on column public.order_items.default_qty is '처음 체크할 때 들어가는 평소 수량';
 comment on column public.order_items.step is '[+][−] 한 번에 바뀌는 양 (예: 한우사골 10키로, 깐생강 100g)';
 
@@ -79,30 +80,29 @@ create table public.order_lines (
   order_id     uuid not null references public.orders (id) on delete cascade,
   item_id      uuid not null references public.order_items (id) on delete restrict,
   qty          numeric(10, 3) not null check (qty > 0),
-  unit_price   bigint check (unit_price is null or unit_price between 0 and 999999999),
-  recv_status  text check (recv_status is null or recv_status in ('ok', 'changed', 'missing')),
-  recv_qty     numeric(10, 3) check (recv_qty is null or recv_qty >= 0),
-  recv_price   bigint check (recv_price is null or recv_price between 0 and 999999999),
+  recv_status  text check (recv_status is null or recv_status in ('ok', 'missing')),
   received_at  timestamptz,
   constraint order_lines_order_item_key unique (order_id, item_id)
 );
 
 create index order_lines_order_idx on public.order_lines (order_id);
 
--- 4) 입고 확인 (발주 1건 × 거래처)
+-- 4) 입고 확인 (발주 1건 × 거래처): 품목 체크 + 거래명세표 총금액
 create table public.order_receipts (
-  id              uuid primary key default gen_random_uuid(),
-  order_id        uuid not null references public.orders (id) on delete cascade,
-  store_id        uuid not null references public.stores (id) on delete restrict,
-  vendor_id       uuid not null references public.vendors (id) on delete restrict,
-  computed_total  bigint not null check (computed_total >= 0),
-  receipt_total   bigint check (receipt_total is null or receipt_total between 0 and 9999999999),
-  memo            text check (memo is null or char_length(memo) <= 200),
-  expense_id      uuid references public.expenses (id) on delete set null,
-  completed_at    timestamptz not null default now(),
-  completed_by    uuid references public.profiles (id) on delete set null,
+  id            uuid primary key default gen_random_uuid(),
+  order_id      uuid not null references public.orders (id) on delete cascade,
+  store_id      uuid not null references public.stores (id) on delete restrict,
+  vendor_id     uuid not null references public.vendors (id) on delete restrict,
+  amount        bigint not null check (amount between 0 and 9999999999),
+  missing_count integer not null default 0 check (missing_count >= 0),
+  memo          text check (memo is null or char_length(memo) <= 200),
+  expense_id    uuid references public.expenses (id) on delete set null,
+  completed_at  timestamptz not null default now(),
+  completed_by  uuid references public.profiles (id) on delete set null,
   constraint order_receipts_order_vendor_key unique (order_id, vendor_id)
 );
+
+comment on column public.order_receipts.amount is '거래명세표 총금액(부가세 포함) — 이 금액으로 식재료 지출(외상이면 미수)이 생긴다';
 
 -- 공통 트리거
 create trigger order_items_stamp before insert or update on public.order_items
@@ -114,7 +114,7 @@ create trigger orders_stamp before insert or update on public.orders
 create trigger order_receipts_audit after insert or update or delete on public.order_receipts
   for each row execute function app.audit_row_change();
 
--- 단가를 품목표에서 직접 고치면 변동 기록 (입고 확인 함수는 직접 기록하므로 제외)
+-- 품목표 단가를 고치면 변동 기록 (밤 9시 텔레그램 [단가 변동])
 create or replace function app.log_item_price_edit()
 returns trigger
 language plpgsql
@@ -122,9 +122,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.unit_price is distinct from old.unit_price
-     and new.unit_price is not null
-     and coalesce(current_setting('app.price_source', true), '') <> 'receive' then
+  if new.unit_price is distinct from old.unit_price and new.unit_price is not null then
     insert into public.order_price_changes (store_id, item_id, old_price, new_price, changed_by, source)
     values (new.store_id, new.id, old.unit_price, new.unit_price, auth.uid(), 'edit');
   end if;
@@ -209,8 +207,8 @@ begin
   end if;
 
   delete from public.order_lines where order_id = v_order.id;
-  insert into public.order_lines (order_id, item_id, qty, unit_price)
-  select v_order.id, i.id, (l ->> 'qty')::numeric, i.unit_price
+  insert into public.order_lines (order_id, item_id, qty)
+  select v_order.id, i.id, (l ->> 'qty')::numeric
   from jsonb_array_elements(p_lines) as l
   join public.order_items i on i.id = (l ->> 'item_id')::uuid;
 
@@ -228,15 +226,14 @@ begin
 end;
 $$;
 
--- 입고 완료: 거래처 하나의 줄을 모두 확인해야 한다.
---  p_lines = [{"line_id","status":"ok|changed|missing","qty","price"}]
+-- 입고 완료: 거래처 하나의 품목을 모두 체크(왔음/안 옴)하고 거래명세표 총금액을 넣는다.
+--  p_lines = [{"line_id","status":"ok|missing"}], p_amount = 총금액(부가세 포함)
 --  (거래처 미정 품목은 여기서 고른 거래처로 정해지고 다음부터 기억)
 create or replace function public.complete_receipt(
   p_order_id uuid,
   p_vendor_id uuid,
   p_lines jsonb,
-  p_vat bigint,
-  p_receipt_total bigint,
+  p_amount bigint,
   p_memo text
 )
 returns uuid
@@ -249,12 +246,12 @@ declare
   v_vendor public.vendors%rowtype;
   v_bad integer;
   v_missing integer;
-  v_total bigint;
-  v_vat bigint := coalesce(p_vat, 0);
+  v_received integer;
+  v_absent integer;
   v_expense uuid;
   v_category uuid;
   v_receipt uuid;
-  v_n integer;
+  v_summary text;
 begin
   if auth.uid() is null then
     raise exception '로그인이 필요합니다.' using errcode = '42501';
@@ -273,14 +270,11 @@ begin
   if exists (select 1 from public.order_receipts r where r.order_id = o.id and r.vendor_id = p_vendor_id) then
     raise exception '이 거래처 입고는 이미 확인했습니다.' using errcode = '22023';
   end if;
-  if v_vat < 0 or v_vat > 999999999 then
-    raise exception '부가세 금액을 확인하세요.' using errcode = '22023';
-  end if;
   if p_lines is null or jsonb_typeof(p_lines) <> 'array' or jsonb_array_length(p_lines) = 0 then
     raise exception '확인할 품목이 없습니다.' using errcode = '22023';
   end if;
 
-  -- 줄 검사: 이 발주의 줄이고, 거래처가 맞거나 미정, 아직 입고 전, 값이 올바른지
+  -- 줄 검사: 이 발주의 줄이고, 거래처가 맞거나 미정, 아직 확인 전, 상태가 올바른지
   select count(*) into v_bad
   from jsonb_array_elements(p_lines) as l
   left join public.order_lines ol
@@ -291,22 +285,17 @@ begin
     when ol.id is null then true
     when ol.received_at is not null then true
     when i.vendor_id is not null and i.vendor_id <> p_vendor_id then true
-    when coalesce(l ->> 'status', '') not in ('ok', 'changed', 'missing') then true
-    when l ->> 'status' = 'changed' and (
-      coalesce(l ->> 'qty', '') !~ '^[0-9]{1,7}([.][0-9]{1,3})?$'
-      or coalesce(l ->> 'price', '') !~ '^[0-9]{1,9}$'
-    ) then true
-    when l ->> 'status' = 'ok' and coalesce(ol.unit_price, i.unit_price) is null then true
+    when coalesce(l ->> 'status', '') not in ('ok', 'missing') then true
     else false
   end;
   if v_bad > 0 then
-    raise exception '확인 줄 %개가 올바르지 않습니다 (단가 모르는 품목은 [다름]으로 단가를 적어 주세요).', v_bad using errcode = '22023';
+    raise exception '확인 줄 %개가 올바르지 않습니다.', v_bad using errcode = '22023';
   end if;
   if (select count(distinct l ->> 'line_id') from jsonb_array_elements(p_lines) as l) <> jsonb_array_length(p_lines) then
     raise exception '같은 줄이 두 번 들어 있습니다.' using errcode = '22023';
   end if;
 
-  -- 이 거래처로 정해진 줄은 하나도 빠지면 안 된다 (모두 체크해야 완료)
+  -- 이 거래처로 정해진 품목은 하나도 빠지면 안 된다 (모두 체크해야 완료)
   select count(*) into v_missing
   from public.order_lines ol
   join public.order_items i on i.id = ol.item_id
@@ -315,34 +304,29 @@ begin
     and i.vendor_id = p_vendor_id
     and not exists (select 1 from jsonb_array_elements(p_lines) as l where l ->> 'line_id' = ol.id::text);
   if v_missing > 0 then
-    raise exception '아직 확인하지 않은 품목이 %개 있습니다. 모든 줄을 체크해 주세요.', v_missing using errcode = '22023';
+    raise exception '아직 체크하지 않은 품목이 %개 있습니다. 모든 품목을 체크해 주세요.', v_missing using errcode = '22023';
   end if;
 
-  -- 받은 양·단가 기록
+  select count(*) filter (where l ->> 'status' = 'ok'), count(*) filter (where l ->> 'status' = 'missing')
+  into v_received, v_absent
+  from jsonb_array_elements(p_lines) as l;
+
+  -- 총금액: 받은 품목이 있으면 1원 이상, 하나도 안 왔으면 0원
+  if p_amount is null or p_amount < 0 or p_amount > 9999999999 then
+    raise exception '거래명세표 총금액을 적어 주세요.' using errcode = '22023';
+  end if;
+  if v_received > 0 and p_amount = 0 then
+    raise exception '받은 품목이 있으면 총금액을 적어 주세요.' using errcode = '22023';
+  end if;
+  if v_received = 0 and p_amount > 0 then
+    raise exception '모든 품목이 안 왔는데 금액이 있습니다. 다시 확인해 주세요.' using errcode = '22023';
+  end if;
+
   update public.order_lines ol
   set recv_status = l ->> 'status',
-      recv_qty = case l ->> 'status'
-        when 'missing' then 0
-        when 'ok' then ol.qty
-        else (l ->> 'qty')::numeric
-      end,
-      recv_price = case l ->> 'status'
-        when 'changed' then (l ->> 'price')::bigint
-        else coalesce(ol.unit_price, (select i.unit_price from public.order_items i where i.id = ol.item_id))
-      end,
       received_at = now()
   from jsonb_array_elements(p_lines) as l
   where ol.id = (l ->> 'line_id')::uuid;
-
-  select coalesce(sum(round(ol.recv_qty * ol.recv_price)::bigint), 0) + v_vat
-  into v_total
-  from public.order_lines ol
-  where ol.id in (select (l ->> 'line_id')::uuid from jsonb_array_elements(p_lines) as l);
-
-  if p_receipt_total is not null and p_receipt_total <> v_total and btrim(coalesce(p_memo, '')) = '' then
-    raise exception '영수증 합계(%)와 앱 합계(%)가 다릅니다. 다시 확인하거나 이유를 적어 주세요.', p_receipt_total, v_total
-      using errcode = '22023';
-  end if;
 
   -- 거래처 미정 품목은 이 거래처로 기억
   update public.order_items i
@@ -352,27 +336,22 @@ begin
     and ol.id in (select (l ->> 'line_id')::uuid from jsonb_array_elements(p_lines) as l)
     and i.vendor_id is null;
 
-  -- 바뀐 단가는 품목표에 저장 + 변동 기록
-  insert into public.order_price_changes (store_id, item_id, old_price, new_price, changed_by, source)
-  select o.store_id, i.id, i.unit_price, ol.recv_price, auth.uid(), 'receive'
-  from public.order_lines ol
-  join public.order_items i on i.id = ol.item_id
-  where ol.id in (select (l ->> 'line_id')::uuid from jsonb_array_elements(p_lines) as l)
-    and ol.recv_status = 'changed'
-    and ol.recv_price is distinct from i.unit_price;
+  -- 받은 품목 요약 (지출 내용에 남김): '숙주5박스, 대파10단 외 2'
+  select string_agg(x.label, ', ' order by x.ord)
+         || case when max(x.total) > 4 then ' 외 ' || (max(x.total) - 4) else '' end
+  into v_summary
+  from (
+    select i.name || case when i.unit is null and ol.qty = 1 then '' else app.fmt_qty(ol.qty) || coalesce(i.unit, '') end as label,
+           row_number() over (order by i.sort_order, i.name) as ord,
+           count(*) over () as total
+    from public.order_lines ol
+    join public.order_items i on i.id = ol.item_id
+    where ol.id in (select (l ->> 'line_id')::uuid from jsonb_array_elements(p_lines) as l)
+      and ol.recv_status = 'ok'
+  ) x
+  where x.ord <= 4;
 
-  perform set_config('app.price_source', 'receive', true);
-  update public.order_items i
-  set unit_price = ol.recv_price
-  from public.order_lines ol
-  where ol.item_id = i.id
-    and ol.id in (select (l ->> 'line_id')::uuid from jsonb_array_elements(p_lines) as l)
-    and ol.recv_status = 'changed'
-    and ol.recv_price is distinct from i.unit_price;
-  perform set_config('app.price_source', '', true);
-
-  -- 지출 (받은 것이 있을 때만)
-  if v_total > 0 then
+  if p_amount > 0 then
     v_category := coalesce(
       v_vendor.default_category_id,
       (select c.id from public.expense_categories c where c.code = 'food')
@@ -384,35 +363,21 @@ begin
       v_category,
       left(v_vendor.name, 60),
       v_vendor.id,
-      left(concat_ws(' · ', '입고 확인 (' || to_char(o.order_date, 'MM/DD') || ' 발주)', nullif(btrim(coalesce(p_memo, '')), '')), 200),
-      v_total,
+      left(concat_ws(' · ',
+        '입고 확인(' || to_char(o.order_date, 'MM/DD') || ' 발주)',
+        v_summary,
+        case when v_absent > 0 then '안 옴 ' || v_absent || '개' end,
+        nullif(btrim(coalesce(p_memo, '')), '')
+      ), 200),
+      p_amount,
       'actual',
       v_vendor.on_credit
     )
     returning id into v_expense;
-
-    insert into public.expense_lines (expense_id, line_no, item_name, quantity, unit, unit_price, amount)
-    select v_expense,
-           row_number() over (order by i.sort_order, i.name),
-           i.name,
-           ol.recv_qty,
-           i.unit,
-           ol.recv_price,
-           round(ol.recv_qty * ol.recv_price)::bigint
-    from public.order_lines ol
-    join public.order_items i on i.id = ol.item_id
-    where ol.id in (select (l ->> 'line_id')::uuid from jsonb_array_elements(p_lines) as l)
-      and ol.recv_qty > 0;
-    get diagnostics v_n = row_count;
-
-    if v_vat > 0 then
-      insert into public.expense_lines (expense_id, line_no, item_name, quantity, unit, unit_price, amount)
-      values (v_expense, v_n + 1, '부가세', 1, null, v_vat, v_vat);
-    end if;
   end if;
 
-  insert into public.order_receipts (order_id, store_id, vendor_id, computed_total, receipt_total, memo, expense_id, completed_by)
-  values (o.id, o.store_id, p_vendor_id, v_total, p_receipt_total, nullif(left(btrim(coalesce(p_memo, '')), 200), ''), v_expense, auth.uid())
+  insert into public.order_receipts (order_id, store_id, vendor_id, amount, missing_count, memo, expense_id, completed_by)
+  values (o.id, o.store_id, p_vendor_id, p_amount, v_absent, nullif(left(btrim(coalesce(p_memo, '')), 200), ''), v_expense, auth.uid())
   returning id into v_receipt;
 
   return v_receipt;
@@ -594,11 +559,11 @@ grant execute on function app.log_item_price_edit(), app.order_day(), app.fmt_qt
 grant execute on function app.daily_order_messages(date), app.send_daily_orders(date) to service_role;
 
 revoke all on function public.save_order(uuid, jsonb, boolean) from public, anon;
-revoke all on function public.complete_receipt(uuid, uuid, jsonb, bigint, bigint, text) from public, anon;
+revoke all on function public.complete_receipt(uuid, uuid, jsonb, bigint, text) from public, anon;
 revoke all on function public.send_telegram_test() from public, anon;
 revoke all on function public.send_orders_now() from public, anon;
 grant execute on function public.save_order(uuid, jsonb, boolean) to authenticated;
-grant execute on function public.complete_receipt(uuid, uuid, jsonb, bigint, bigint, text) to authenticated;
+grant execute on function public.complete_receipt(uuid, uuid, jsonb, bigint, text) to authenticated;
 grant execute on function public.send_telegram_test() to authenticated;
 grant execute on function public.send_orders_now() to authenticated;
 
