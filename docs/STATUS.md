@@ -147,6 +147,7 @@ AI: 처음엔 Claude Opus 5.5(유료 API)로 만들었다가, 같은 날 대표�
 | Gemini 열쇠(GEMINI_API_KEY) Supabase Secrets 입력 (대표) | ✅ 이름 확인 (값은 안 봄) |
 | Edge Function 배포 (CLI `--use-api`, 대표 로그인 1회) | ✅ |
 | 배포된 함수: 로그인 없으면 401, 공개 키만으로도 401, 브라우저 CORS 허용 | ✅ 실제 확인 |
+| 사이트 배포(4a4b645): /statements 목록, /statements/new 거래처 고르기(1호점 12곳) 화면 | ✅ 실제 확인 (대표 계정, 보기만) |
 | 실제 거래명세표 사진으로 AI 읽기 정확도 · 휴대폰 카메라 화면 | ⬜ 실제 사용으로 확인 필요 |
 
 ## 배포 — Netlify 무료 (2026-10-13)
